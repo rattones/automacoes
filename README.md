@@ -2,7 +2,134 @@
 
 Sistema modular de atualização automática do servidor, dividido em componentes reutilizáveis.
 
-## Estrutura do Projeto
+## 🚀 Guia de Instalação Inicial
+
+### Passo 1: Preparar o Ubuntu Server
+
+#### 1.1. Download do Ubuntu Server
+Baixe a ISO mais recente do Ubuntu Server:
+- 🔗 **[Ubuntu Server 24.04 LTS](https://ubuntu.com/download/server)** (Recomendado)
+- 🔗 [Ubuntu Server 22.04 LTS](https://ubuntu.com/download/server) (Alternativa estável)
+
+#### 1.2. Criar Pendrive Bootável
+
+**No Windows:**
+1. Baixe o [Rufus](https://rufus.ie/)
+2. Insira o pendrive (mínimo 4GB)
+3. Abra o Rufus
+4. Selecione o pendrive em "Device"
+5. Clique em "SELECT" e escolha a ISO do Ubuntu Server
+6. Mantenha as configurações padrão
+7. Clique em "START"
+
+**No Linux:**
+```bash
+# Identifique o pendrive (geralmente /dev/sdb)
+lsblk
+
+# Copie a ISO para o pendrive (CUIDADO: substitua /dev/sdX pelo seu dispositivo)
+sudo dd if=ubuntu-server-24.04.iso of=/dev/sdX bs=4M status=progress && sync
+```
+
+**No macOS:**
+```bash
+# Identifique o pendrive
+diskutil list
+
+# Desmonte o disco (substitua diskX pelo seu dispositivo)
+diskutil unmountDisk /dev/diskX
+
+# Copie a ISO
+sudo dd if=ubuntu-server-24.04.iso of=/dev/rdiskX bs=1m
+```
+
+#### 1.3. Instalar Ubuntu Server
+
+1. **Boot pelo pendrive:**
+   - Insira o pendrive no servidor
+   - Acesse o BIOS/UEFI (geralmente F2, F12, DEL ou ESC)
+   - Configure para dar boot pelo USB
+
+2. **Instalação:**
+   - Selecione o idioma (Português ou English)
+   - Escolha "Install Ubuntu Server"
+   - Configure rede (DHCP ou IP fixo recomendado)
+   - Configure proxy se necessário (geralmente deixar em branco)
+   - Configure particionamento (padrão é adequado)
+   - **IMPORTANTE:** Crie um usuário (ex: rattones)
+   - Marque a opção **"Install OpenSSH server"**
+   - Não selecione pacotes adicionais (faremos via post-install)
+   - Aguarde a instalação e reinicie
+
+3. **Primeiro acesso:**
+   ```bash
+   # Login com usuário criado
+   # Atualize o sistema
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+### Passo 2: Instalar Git e Clonar o Repositório
+
+```bash
+# Instalar Git
+sudo apt install -y git
+
+# Criar pasta de projetos
+mkdir -p ~/projetos
+
+# Clonar este repositório
+cd ~/projetos
+git clone https://github.com/rattones/automacoes.git
+cd automacoes
+```
+
+### Passo 3: Executar Post-Instalação
+
+Este script configurará todo o ambiente automaticamente:
+
+```bash
+# Dar permissão de execução
+chmod +x post-install.sh
+
+# Executar post-instalação
+./post-install.sh
+```
+
+**O que será instalado:**
+- ✅ Atualização completa do sistema
+- ✅ Pacotes essenciais (curl, git, sqlite3)
+- ✅ Cockpit Web Console (acesso web: https://[IP]:9090)
+- ✅ Docker + Docker Compose (sem necessidade de sudo)
+- ✅ Node.js LTS (via NVM)
+- ✅ Estrutura de diretórios para containers
+- ✅ Containers: Home Assistant e Crafty Controller
+- ✅ Restauração automática de backups de projetos
+
+**Tempo estimado:** 10-20 minutos (depende da velocidade da internet)
+
+### Passo 4: Finalizar Configuração
+
+Após a execução do post-install:
+
+```bash
+# Fazer logout e login novamente para usar docker sem sudo
+exit
+
+# Ou aplicar as permissões temporariamente
+newgrp docker
+
+# Verificar containers em execução
+docker ps
+
+# Acessar serviços:
+# - Cockpit: https://[IP-do-servidor]:9090
+# - Crafty: http://[IP-do-servidor]:8000
+# - Home Assistant: http://[IP-do-servidor]:8123
+```
+
+---
+
+## 📋 Estrutura do Projeto
 
 ```
 automacoes/
@@ -62,25 +189,11 @@ automacoes/
 - `mostrar_estatisticas()` - Exibe uso de disco, memória, etc
 - `enviar_notificacao_email()` - Envia notificação por email
 
-## Uso
+---
 
-### Post-Instalação (Executar uma única vez)
-Para configurar um novo servidor do zero:
-```bash
-./post-install.sh
-```
+## 🔧 Uso Diário
 
-Este script irá:
-- Atualizar o sistema operacional
-- Instalar pacotes essenciais (curl, git, sqlite3)
-- Instalar e configurar Cockpit Web Console
-- Instalar e configurar Docker (sem necessidade de sudo)
-- Instalar Node.js (versão LTS)
-- Criar estrutura de diretórios
-- Configurar e iniciar containers (HAOS e Crafty)
-- Restaurar backups de projetos (se existirem)
-
-### Execução Manual
+### Atualização Manual do Servidor
 ```bash
 sudo ./atualizar_servidor.sh
 ```
