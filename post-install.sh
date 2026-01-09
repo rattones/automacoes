@@ -61,14 +61,91 @@ fi
 
 # 2. Instalar pacotes essenciais
 log_separador
-log "Instalando pacotes essenciais (curl, git, sqlite3)..."
+log "Instalando pacotes essenciais (curl, git, sqlite3, zsh)..."
 log_separador
 
-if sudo apt install -y curl git sqlite3; then
+if sudo apt install -y curl git sqlite3 zsh; then
     log_sucesso "Pacotes essenciais instalados"
 else
     log_erro "Falha ao instalar pacotes essenciais"
     exit 1
+fi
+
+# 2a. Instalar e configurar Zsh com Powerlevel10k
+log_separador
+log "Configurando Zsh e Powerlevel10k..."
+log_separador
+
+# Instalar Oh My Zsh se ainda não estiver instalado
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+    log "Instalando Oh My Zsh..."
+    if sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended; then
+        log_sucesso "Oh My Zsh instalado"
+    else
+        log_aviso "Falha ao instalar Oh My Zsh (não é crítico)"
+    fi
+else
+    log_sucesso "Oh My Zsh já está instalado"
+fi
+
+# Instalar Powerlevel10k
+if [ ! -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k" ]; then
+    log "Instalando tema Powerlevel10k..."
+    if git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k; then
+        log_sucesso "Powerlevel10k instalado"
+    else
+        log_aviso "Falha ao instalar Powerlevel10k (não é crítico)"
+    fi
+else
+    log_sucesso "Powerlevel10k já está instalado"
+fi
+
+# Restaurar configurações do Zsh do backup se existirem
+if [ -f "$SCRIPT_DIR/backups/zsh/.zshrc" ]; then
+    log "Restaurando configuração do Zsh do backup..."
+    cp "$SCRIPT_DIR/backups/zsh/.zshrc" "$HOME/.zshrc"
+    log_sucesso "Arquivo .zshrc restaurado"
+else
+    log_aviso "Backup de .zshrc não encontrado"
+    
+    # Tentar baixar do GitHub
+    log "Tentando baixar .zshrc do repositório..."
+    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/zsh/.zshrc -o "$HOME/.zshrc" 2>/dev/null; then
+        log_sucesso "Arquivo .zshrc baixado do GitHub"
+    else
+        log_aviso "Não foi possível baixar .zshrc do GitHub"
+    fi
+fi
+
+# Restaurar configuração do Powerlevel10k do backup se existir
+if [ -f "$SCRIPT_DIR/backups/zsh/.p10k.zsh" ]; then
+    log "Restaurando configuração do Powerlevel10k do backup..."
+    cp "$SCRIPT_DIR/backups/zsh/.p10k.zsh" "$HOME/.p10k.zsh"
+    log_sucesso "Arquivo .p10k.zsh restaurado"
+else
+    log_aviso "Backup de .p10k.zsh não encontrado"
+    
+    # Tentar baixar do GitHub
+    log "Tentando baixar .p10k.zsh do repositório..."
+    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/zsh/.p10k.zsh -o "$HOME/.p10k.zsh" 2>/dev/null; then
+        log_sucesso "Arquivo .p10k.zsh baixado do GitHub"
+    else
+        log_aviso "Não foi possível baixar .p10k.zsh do GitHub"
+    fi
+fi
+
+# Configurar Zsh como shell padrão
+if [ "$SHELL" != "$(which zsh)" ]; then
+    log "Configurando Zsh como shell padrão..."
+    if sudo chsh -s $(which zsh) $USER; then
+        log_sucesso "Zsh configurado como shell padrão"
+        log_aviso "Faça logout e login novamente para usar o Zsh"
+    else
+        log_aviso "Não foi possível configurar Zsh como shell padrão"
+        log "Execute manualmente: chsh -s $(which zsh)"
+    fi
+else
+    log_sucesso "Zsh já é o shell padrão"
 fi
 
 # 2b. Clonar repositório se ainda não existir

@@ -112,13 +112,15 @@ chmod +x post-install.sh
 
 **O que será instalado:**
 - ✅ Atualização completa do sistema
-- ✅ Pacotes essenciais (curl, git, sqlite3)
+- ✅ Pacotes essenciais (curl, git, sqlite3, zsh)
+- ✅ Zsh com Oh My Zsh e tema Powerlevel10k
 - ✅ Cockpit Web Console (acesso web: https://[IP]:9090)
 - ✅ Docker + Docker Compose (sem necessidade de sudo)
 - ✅ Node.js LTS (via NVM)
 - ✅ Estrutura de diretórios para containers
 - ✅ Containers: Home Assistant e Crafty Controller
 - ✅ Restauração automática de backups de projetos
+- ✅ Restauração de configurações do Zsh (.zshrc e .p10k.zsh)
 
 **Tempo estimado:** 10-20 minutos (depende da velocidade da internet)
 
@@ -159,6 +161,8 @@ automacoes/
 ├── backups/                       # Backups de configurações
 │   ├── crafty/compose.yml         # Backup Crafty Controller
 │   ├── haos/compose.yml           # Backup Home Assistant
+│   ├── zsh/.zshrc                 # Backup configuração Zsh
+│   ├── zsh/.p10k.zsh              # Backup configuração Powerlevel10k
 │   ├── projetos/                  # Backups de projetos (.zip)
 │   └── README.md                  # Documentação de backups
 └── logs/                          # Logs de execução (não versionado)
