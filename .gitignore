@@ -1,0 +1,11 @@
+# Ignorar arquivos de log
+logs/
+
+# Arquivos temporários
+*.tmp
+*.bak
+*~
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
