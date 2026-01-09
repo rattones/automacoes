@@ -17,6 +17,19 @@ log "Instalando Docker..."
 # Remover versões antigas
 sudo apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
 
+# Remover configurações antigas/duplicadas do Docker
+log "Verificando configurações antigas do Docker..."
+
+if [ -f /etc/apt/sources.list.d/docker.sources ]; then
+    log_aviso "Removendo configuração antiga: docker.sources"
+    sudo rm /etc/apt/sources.list.d/docker.sources
+fi
+
+if [ -f /etc/apt/keyrings/docker.asc ] && [ -f /etc/apt/keyrings/docker.gpg ]; then
+    log_aviso "Removendo chave GPG duplicada: docker.asc"
+    sudo rm /etc/apt/keyrings/docker.asc
+fi
+
 # Instalar dependências
 sudo apt install -y ca-certificates gnupg lsb-release
 
