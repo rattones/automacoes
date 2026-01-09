@@ -177,7 +177,14 @@ if [ -f "$SCRIPT_DIR/backups/haos/compose.yml" ]; then
     cp "$SCRIPT_DIR/backups/haos/compose.yml" "$HOME/haos/compose.yml"
     log_sucesso "Arquivo compose.yml copiado para $HOME/haos"
 else
-    log_erro "Arquivo de backup compose.yml do HAOS não encontrado"
+    log_aviso "Arquivo de backup compose.yml do HAOS não encontrado localmente"
+    log "Tentando baixar do repositório GitHub..."
+    
+    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/haos/compose.yml -o "$HOME/haos/compose.yml"; then
+        log_sucesso "Arquivo compose.yml do HAOS baixado do GitHub"
+    else
+        log_erro "Falha ao baixar compose.yml do HAOS"
+    fi
 fi
 
 # Copiar compose.yml do Crafty
@@ -185,7 +192,14 @@ if [ -f "$SCRIPT_DIR/backups/crafty/compose.yml" ]; then
     cp "$SCRIPT_DIR/backups/crafty/compose.yml" "$HOME/crafty/compose.yml"
     log_sucesso "Arquivo compose.yml copiado para $HOME/crafty"
 else
-    log_erro "Arquivo de backup compose.yml do Crafty não encontrado"
+    log_aviso "Arquivo de backup compose.yml do Crafty não encontrado localmente"
+    log "Tentando baixar do repositório GitHub..."
+    
+    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/crafty/compose.yml -o "$HOME/crafty/compose.yml"; then
+        log_sucesso "Arquivo compose.yml do Crafty baixado do GitHub"
+    else
+        log_erro "Falha ao baixar compose.yml do Crafty"
+    fi
 fi
 
 # 7. Iniciar containers (após adicionar usuário ao grupo docker)
