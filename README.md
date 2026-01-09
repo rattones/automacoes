@@ -114,6 +114,8 @@ chmod +x post-install.sh
 - ✅ Atualização completa do sistema
 - ✅ Pacotes essenciais (curl, git, sqlite3, zsh)
 - ✅ Zsh com Oh My Zsh e tema Powerlevel10k
+- 🔹 GitHub CLI (gh) - Opcional
+- 🔹 GitHub Copilot CLI - Opcional (requer gh)
 - ✅ Cockpit Web Console (acesso web: https://[IP]:9090)
 - ✅ Docker + Docker Compose (sem necessidade de sudo)
 - ✅ Node.js LTS (via NVM)
