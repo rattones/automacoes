@@ -25,6 +25,7 @@ declare -a CONTAINERS=(
 source "$LIB_DIR/logging.sh"
 source "$LIB_DIR/atualizar_sistema.sh"
 source "$LIB_DIR/atualizar_container.sh"
+source "$LIB_DIR/atualizar_nodejs.sh"
 source "$LIB_DIR/verificar_sistema.sh"
 
 # Verificar se está rodando como root
@@ -60,19 +61,22 @@ else
     log_aviso "Nenhum container configurado para atualização"
 fi
 
-# 3. Verificar necessidade de reinicialização
+# 3. Atualizar Node.js, NVM e npm
+atualizar_nodejs_completo
+
+# 4. Verificar necessidade de reinicialização
 verificar_necessidade_reinicializacao
 
-# 4. Mostrar estatísticas finais
+# 5. Mostrar estatísticas finais
 mostrar_estatisticas
 
-# 5. Finalização
+# 6. Finalização
 log_separador
 log "ATUALIZAÇÃO CONCLUÍDA COM SUCESSO!"
 log "Log completo salvo em: $LOG_FILE"
 log_separador
 
-# 6. Enviar notificação por email (se configurado)
+# 7. Enviar notificação por email (se configurado)
 if [ -n "$EMAIL_DESTINO" ]; then
     enviar_notificacao_email "$EMAIL_DESTINO" "Atualização do Servidor - $(hostname)" "$LOG_FILE"
 fi

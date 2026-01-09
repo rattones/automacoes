@@ -154,6 +154,7 @@ automacoes/
 │   ├── logging.sh                 # Sistema de logs
 │   ├── atualizar_sistema.sh       # Atualização de pacotes do SO
 │   ├── atualizar_container.sh     # Atualização de containers Docker
+│   ├── atualizar_nodejs.sh        # Atualização de Node.js, NVM e npm
 │   └── verificar_sistema.sh       # Verificações e estatísticas
 ├── backups/                       # Backups de configurações
 │   ├── crafty/compose.yml         # Backup Crafty Controller
@@ -203,6 +204,15 @@ automacoes/
 - `verificar_necessidade_reinicializacao()` - Verifica se requer reboot
 - `mostrar_estatisticas()` - Exibe uso de disco, memória, etc
 - `enviar_notificacao_email()` - Envia notificação por email
+
+### 6. Atualização de Node.js (lib/atualizar_nodejs.sh)
+**Funções:**
+- `verificar_nvm_instalado()` - Verifica se NVM está instalado
+- `atualizar_nvm()` - Atualiza NVM para versão mais recente
+- `atualizar_nodejs()` - Atualiza Node.js para versão LTS
+- `atualizar_npm()` - Atualiza npm para versão mais recente
+- `limpar_versoes_antigas_nodejs()` - Remove versões antigas do Node.js
+- `atualizar_nodejs_completo()` - Executa todo o fluxo de atualização
 
 ---
 
