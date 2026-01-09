@@ -1,0 +1,21 @@
+services:
+  crafty:
+    container_name: crafty_container
+    image: registry.gitlab.com/crafty-controller/crafty-4:latest
+    restart: always
+    environment:
+      - TZ=Etc/UTC
+    ports:
+      - "8000:8000" # HTTP
+      - "8443:8443" # HTTPS
+      - "8125:8125" # DYNMAP
+      - "19130:1910/udp" # BEDROCK
+      - "24400-24600:24400-24600" # VOICE-CHAT
+      - "25500-26000:25500-26000" # MC SERV PORT RANGE
+    volumes:
+      - ./docker/backups:/crafty/backups
+      - ./docker/logs:/crafty/logs
+      - ./docker/servers:/crafty/servers
+      - ./docker/config:/crafty/app/config
+      - ./docker/import:/crafty/import
+
