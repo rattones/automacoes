@@ -71,6 +71,38 @@ else
     exit 1
 fi
 
+# 2b. Clonar repositório se ainda não existir
+log_separador
+log "Verificando repositório do projeto..."
+log_separador
+
+REPO_DIR="$HOME/projetos/automacoes"
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+    log "Clonando repositório do GitHub..."
+    mkdir -p "$HOME/projetos"
+    
+    if git clone https://github.com/rattones/automacoes.git "$REPO_DIR"; then
+        log_sucesso "Repositório clonado em $REPO_DIR"
+        
+        # Atualizar SCRIPT_DIR para usar o repositório clonado
+        SCRIPT_DIR="$REPO_DIR"
+        log_sucesso "Usando arquivos do repositório clonado"
+    else
+        log_aviso "Falha ao clonar repositório (não é crítico)"
+        log "Continuando com download direto dos arquivos..."
+    fi
+else
+    log_sucesso "Repositório já existe em $REPO_DIR"
+    
+    # Se já existe, fazer pull para atualizar
+    cd "$REPO_DIR"
+    if git pull origin main 2>/dev/null; then
+        log_sucesso "Repositório atualizado"
+        SCRIPT_DIR="$REPO_DIR"
+    fi
+fi
+
 # 3. Instalar Cockpit (Web Console da Red Hat)
 log_separador
 log "Instalando Cockpit Web Console..."
