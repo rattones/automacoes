@@ -87,6 +87,7 @@ cd automacoes
 
 Este script configurará todo o ambiente automaticamente:
 
+**Opção 1: Se você já clonou o repositório**
 ```bash
 # Dar permissão de execução
 chmod +x post-install.sh
@@ -94,6 +95,20 @@ chmod +x post-install.sh
 # Executar post-instalação
 ./post-install.sh
 ```
+
+**Opção 2: Download direto do script (sem clonar o repositório)**
+```bash
+# Baixar o script
+wget https://raw.githubusercontent.com/rattones/automacoes/main/post-install.sh
+
+# Dar permissão de execução
+chmod +x post-install.sh
+
+# Executar
+./post-install.sh
+```
+
+**Link direto:** [📥 Baixar post-install.sh](https://raw.githubusercontent.com/rattones/automacoes/main/post-install.sh)
 
 **O que será instalado:**
 - ✅ Atualização completa do sistema
