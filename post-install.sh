@@ -61,17 +61,51 @@ fi
 
 # 2. Instalar pacotes essenciais
 log_separador
-log "Instalando pacotes essenciais (curl, git, sqlite3, zsh)..."
+log "Instalando pacotes essenciais (curl, git, sqlite3, zsh, openssh-server)..."
 log_separador
 
-if sudo apt install -y curl git sqlite3 zsh; then
+if sudo apt install -y curl git sqlite3 zsh openssh-server; then
     log_sucesso "Pacotes essenciais instalados"
 else
     log_erro "Falha ao instalar pacotes essenciais"
     exit 1
 fi
 
-# 2a. Instalar e configurar Zsh com Powerlevel10k
+# 2a. Configurar SSH Server
+log_separador
+log "Configurando SSH Server para acesso remoto..."
+log_separador
+
+# Verificar se o SSH está instalado
+if command -v sshd &> /dev/null; then
+    # Habilitar e iniciar o serviço SSH
+    if sudo systemctl enable ssh && sudo systemctl start ssh; then
+        log_sucesso "SSH Server habilitado e iniciado"
+        
+        # Verificar status
+        if sudo systemctl is-active --quiet ssh; then
+            log_sucesso "SSH Server está rodando"
+            
+            # Mostrar informações de conexão
+            local ip_local=$(hostname -I | awk '{print $1}')
+            log "Informações de acesso remoto:"
+            log "  Usuário: $USER"
+            log "  IP local: $ip_local"
+            log "  Porta: 22 (padrão)"
+            log ""
+            log "Para conectar de outro computador:"
+            log "  ssh $USER@$ip_local"
+        else
+            log_aviso "SSH Server instalado mas não está rodando"
+        fi
+    else
+        log_erro "Falha ao habilitar SSH Server"
+    fi
+else
+    log_erro "SSH Server não foi instalado corretamente"
+fi
+
+# 2b. Instalar e configurar Zsh com Powerlevel10k
 log_separador
 log "Configurando Zsh e Powerlevel10k..."
 log_separador

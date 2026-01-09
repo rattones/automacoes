@@ -112,7 +112,8 @@ chmod +x post-install.sh
 
 **O que será instalado:**
 - ✅ Atualização completa do sistema
-- ✅ Pacotes essenciais (curl, git, sqlite3, zsh)
+- ✅ Pacotes essenciais (curl, git, sqlite3, zsh, openssh-server)
+- ✅ SSH Server para acesso remoto
 - ✅ Zsh com Oh My Zsh e tema Powerlevel10k
 - 🔹 GitHub CLI (gh) - Opcional
 - 🔹 GitHub Copilot CLI - Opcional (requer gh)
@@ -141,6 +142,7 @@ newgrp docker
 docker ps
 
 # Acessar serviços:
+# - SSH: ssh usuario@[IP-do-servidor] (porta 22)
 # - Cockpit: https://[IP-do-servidor]:9090
 # - Crafty: http://[IP-do-servidor]:8000
 # - Home Assistant: http://[IP-do-servidor]:8123
