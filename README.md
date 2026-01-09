@@ -7,11 +7,16 @@ Sistema modular de atualização automática do servidor, dividido em componente
 ```
 automacoes/
 ├── atualizar_servidor.sh          # Script orquestrador principal
-└── lib/                           # Bibliotecas de funções
-    ├── logging.sh                 # Sistema de logs
-    ├── atualizar_sistema.sh       # Atualização de pacotes do SO
-    ├── atualizar_container.sh     # Atualização de containers Docker
-    └── verificar_sistema.sh       # Verificações e estatísticas
+├── lib/                           # Bibliotecas de funções
+│   ├── logging.sh                 # Sistema de logs
+│   ├── atualizar_sistema.sh       # Atualização de pacotes do SO
+│   ├── atualizar_container.sh     # Atualização de containers Docker
+│   └── verificar_sistema.sh       # Verificações e estatísticas
+├── backups/                       # Backups de configurações
+│   ├── crafty/compose.yml         # Backup Crafty Controller
+│   ├── haos/compose.yml           # Backup Home Assistant
+│   └── README.md                  # Documentação de backups
+└── logs/                          # Logs de execução (não versionado)
 ```
 
 ## Componentes
