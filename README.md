@@ -89,6 +89,9 @@ Este script configurará todo o ambiente automaticamente:
 
 **Opção 1: Se você já clonou o repositório**
 ```bash
+# Baixar o script bootstrap
+wget https://raw.githubusercontent.com/rattones/automacoes/main/post-install.sh
+
 # Dar permissão de execução
 chmod +x post-install.sh
 
@@ -96,19 +99,27 @@ chmod +x post-install.sh
 ./post-install.sh
 ```
 
-**Opção 2: Download direto do script (sem clonar o repositório)**
-```bash
-# Baixar o script
-wget https://raw.githubusercontent.com/rattones/automacoes/main/post-install.sh
-
-# Dar permissão de execução
-chmod +x post-install.sh
-
-# Executar
-./post-install.sh
-```
-
 **Link direto:** [📥 Baixar post-install.sh](https://raw.githubusercontent.com/rattones/automacoes/main/post-install.sh)
+
+**Como funciona:**
+
+O script de post-instalação é modular e funciona em duas etapas:
+
+1. **Bootstrap (`post-install.sh`)**: Script inicial que pode ser baixado diretamente
+   - Atualiza o sistema
+   - Instala git e curl
+   - Clona o repositório de automações
+   - Executa a instalação completa
+
+2. **Instalação Modular** (`lib/post-install/*.sh`): Módulos especializados executados em sequência
+   - `setup-ssh.sh` - SSH Server para acesso remoto
+   - `setup-zsh.sh` - Zsh + Powerlevel10k
+   - `setup-github-tools.sh` - GitHub CLI e Copilot CLI (opcional)
+   - `setup-cockpit.sh` - Cockpit Web Console
+   - `setup-docker.sh` - Docker + Docker Compose
+   - `setup-nodejs.sh` - Node.js via NVM
+   - `setup-containers.sh` - Deploy containers (Crafty, HAOS)
+   - `setup-projects.sh` - Restauração de backups
 
 **O que será instalado:**
 - ✅ Atualização completa do sistema
@@ -154,14 +165,24 @@ docker ps
 
 ```
 automacoes/
-├── atualizar_servidor.sh          # Script orquestrador principal
-├── post-install.sh                # Script de post-instalação (executar uma vez)
+├── atualizar_servidor.sh          # Script orquestrador - atualização automática
+├── post-install.sh                # Script bootstrap - instalação inicial
 ├── lib/                           # Bibliotecas de funções
-│   ├── logging.sh                 # Sistema de logs
+│   ├── logging.sh                 # Sistema de logs (usado por todos os scripts)
 │   ├── atualizar_sistema.sh       # Atualização de pacotes do SO
 │   ├── atualizar_container.sh     # Atualização de containers Docker
 │   ├── atualizar_nodejs.sh        # Atualização de Node.js, NVM e npm
-│   └── verificar_sistema.sh       # Verificações e estatísticas
+│   ├── verificar_sistema.sh       # Verificações e estatísticas
+│   └── post-install/              # Módulos de instalação inicial
+│       ├── main-install.sh        # Orquestrador da instalação
+│       ├── setup-ssh.sh           # SSH Server
+│       ├── setup-zsh.sh           # Zsh + Powerlevel10k
+│       ├── setup-github-tools.sh  # GitHub CLI + Copilot CLI
+│       ├── setup-cockpit.sh       # Cockpit Web Console
+│       ├── setup-docker.sh        # Docker + Docker Compose
+│       ├── setup-nodejs.sh        # Node.js via NVM
+│       ├── setup-containers.sh    # Deploy containers
+│       └── setup-projects.sh      # Restauração de backups
 ├── backups/                       # Backups de configurações
 │   ├── crafty/compose.yml         # Backup Crafty Controller
 │   ├── haos/compose.yml           # Backup Home Assistant
@@ -174,13 +195,38 @@ automacoes/
 
 ## Componentes
 
-### 1. Script Orquestrador (atualizar_servidor.sh)
-- Coordena a execução de todos os módulos
+### 1. Sistema de Instalação Inicial
+
+#### post-install.sh (Bootstrap)
+- Script standalone que pode ser baixado diretamente
+- Instala dependências mínimas (git, curl)
+- Clona o repositório de automações
+- Delega para `main-install.sh`
+
+#### lib/post-install/main-install.sh (Orquestrador)
+- Executa todos os módulos de instalação em sequência
+- Exibe resumo final e próximos passos
+- Gerencia falhas sem interromper toda a instalação
+
+#### Módulos de Instalação
+- **setup-ssh.sh**: Instala e configura OpenSSH Server
+- **setup-zsh.sh**: Instala Zsh, Oh My Zsh e Powerlevel10k
+- **setup-github-tools.sh**: GitHub CLI e Copilot CLI (opcionais)
+- **setup-cockpit.sh**: Cockpit Web Console
+- **setup-docker.sh**: Docker, Docker Compose e configuração de grupos
+- **setup-nodejs.sh**: Node.js LTS via NVM
+- **setup-containers.sh**: Deploy de containers (Crafty, HAOS)
+- **setup-projects.sh**: Restauração de backups de projetos
+
+### 2. Sistema de Atualização Automática
+
+#### atualizar_servidor.sh (Orquestrador)
+- Coordena a execução de todos os módulos de atualização
 - Gerencia a configuração centralizada
 - Define containers a serem atualizados
 - Controla fluxo de execução
 
-### 2. Biblioteca de Logging (lib/logging.sh)
+### 3. Biblioteca de Logging (lib/logging.sh)
 **Funções:**
 - `log()` - Log padrão com timestamp
 - `log_erro()` - Log de erros (vermelho)
@@ -190,7 +236,7 @@ automacoes/
 - `log_separador()` - Separador visual
 - `inicializar_log()` - Inicializa sistema de logs
 
-### 3. Atualização de Sistema (lib/atualizar_sistema.sh)
+### 4. Atualização de Sistema (lib/atualizar_sistema.sh)
 **Funções:**
 - `atualizar_lista_pacotes()` - apt update
 - `verificar_pacotes_disponiveis()` - Conta pacotes atualizáveis
@@ -200,13 +246,21 @@ automacoes/
 - `limpar_cache_apt()` - apt autoclean
 - `atualizar_sistema_completo()` - Executa todo o fluxo
 
-### 4. Atualização de Containers (lib/atualizar_container.sh)
+### 5. Atualização de Containers (lib/atualizar_container.sh)
 **Funções:**
 - `atualizar_container(nome, diretório)` - Atualiza um container específico
 - `limpar_imagens_antigas()` - Remove imagens Docker não utilizadas
 - `atualizar_containers(...)` - Atualiza múltiplos containers
 
-### 5. Verificação de Sistema (lib/verificar_sistema.sh)
+### 6. Atualização de Node.js (lib/atualizar_nodejs.sh)
+**Funções:**
+- `atualizar_nvm()` - Atualiza NVM via git
+- `atualizar_nodejs()` - Atualiza para versão LTS
+- `atualizar_npm()` - Atualiza NPM para última versão
+- `limpar_versoes_antigas_nodejs()` - Remove versões antigas do Node.js
+- `atualizar_nodejs_completo()` - Executa todo o fluxo
+
+### 7. Verificação de Sistema (lib/verificar_sistema.sh)
 **Funções:**
 - `registrar_info_sistema()` - Registra informações do sistema
 - `verificar_necessidade_reinicializacao()` - Verifica se requer reboot

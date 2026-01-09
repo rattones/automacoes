@@ -1,21 +1,18 @@
 #!/bin/bash
 
 #########################################
-# Script de Post-Instalação do Servidor
-# Configuração inicial completa do ambiente
+# Script de Bootstrap - Post-Instalação
+# Instala dependências mínimas e clona repositório
 #########################################
-
-# Diretório base do script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Cores para output
 VERDE='\033[0;32m'
 VERMELHO='\033[0;31m'
 AMARELO='\033[1;33m'
 AZUL='\033[0;34m'
-NC='\033[0m' # Sem cor
+NC='\033[0m'
 
-# Função para logging
+# Funções de logging simplificadas
 log() {
     echo -e "${AZUL}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"
 }
@@ -44,8 +41,9 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 log_separador
-log "INICIANDO POST-INSTALAÇÃO DO SERVIDOR"
+log "BOOTSTRAP - POST-INSTALAÇÃO DO SERVIDOR"
 log_separador
+
 
 # 1. Atualizar o sistema
 log_separador
@@ -59,474 +57,77 @@ else
     exit 1
 fi
 
-# 2. Instalar pacotes essenciais
+# 2. Instalar pacotes essenciais mínimos
 log_separador
-log "Instalando pacotes essenciais (curl, git, sqlite3, zsh, openssh-server)..."
+log "Instalando pacotes essenciais (curl, git)..."
 log_separador
 
-if sudo apt install -y curl git sqlite3 zsh openssh-server; then
+if sudo apt install -y curl git; then
     log_sucesso "Pacotes essenciais instalados"
 else
     log_erro "Falha ao instalar pacotes essenciais"
     exit 1
 fi
 
-# 2a. Configurar SSH Server
+# 3. Clonar repositório de automações
 log_separador
-log "Configurando SSH Server para acesso remoto..."
-log_separador
-
-# Verificar se o SSH está instalado
-if command -v sshd &> /dev/null; then
-    # Habilitar e iniciar o serviço SSH
-    if sudo systemctl enable ssh && sudo systemctl start ssh; then
-        log_sucesso "SSH Server habilitado e iniciado"
-        
-        # Verificar status
-        if sudo systemctl is-active --quiet ssh; then
-            log_sucesso "SSH Server está rodando"
-            
-            # Mostrar informações de conexão
-            local ip_local=$(hostname -I | awk '{print $1}')
-            log "Informações de acesso remoto:"
-            log "  Usuário: $USER"
-            log "  IP local: $ip_local"
-            log "  Porta: 22 (padrão)"
-            log ""
-            log "Para conectar de outro computador:"
-            log "  ssh $USER@$ip_local"
-        else
-            log_aviso "SSH Server instalado mas não está rodando"
-        fi
-    else
-        log_erro "Falha ao habilitar SSH Server"
-    fi
-else
-    log_erro "SSH Server não foi instalado corretamente"
-fi
-
-# 2b. Instalar e configurar Zsh com Powerlevel10k
-log_separador
-log "Configurando Zsh e Powerlevel10k..."
-log_separador
-
-# Instalar Oh My Zsh se ainda não estiver instalado
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    log "Instalando Oh My Zsh..."
-    if sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended; then
-        log_sucesso "Oh My Zsh instalado"
-    else
-        log_aviso "Falha ao instalar Oh My Zsh (não é crítico)"
-    fi
-else
-    log_sucesso "Oh My Zsh já está instalado"
-fi
-
-# Instalar Powerlevel10k
-if [ ! -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k" ]; then
-    log "Instalando tema Powerlevel10k..."
-    if git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k; then
-        log_sucesso "Powerlevel10k instalado"
-    else
-        log_aviso "Falha ao instalar Powerlevel10k (não é crítico)"
-    fi
-else
-    log_sucesso "Powerlevel10k já está instalado"
-fi
-
-# Restaurar configurações do Zsh do backup se existirem
-if [ -f "$SCRIPT_DIR/backups/zsh/.zshrc" ]; then
-    log "Restaurando configuração do Zsh do backup..."
-    cp "$SCRIPT_DIR/backups/zsh/.zshrc" "$HOME/.zshrc"
-    log_sucesso "Arquivo .zshrc restaurado"
-else
-    log_aviso "Backup de .zshrc não encontrado"
-    
-    # Tentar baixar do GitHub
-    log "Tentando baixar .zshrc do repositório..."
-    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/zsh/.zshrc -o "$HOME/.zshrc" 2>/dev/null; then
-        log_sucesso "Arquivo .zshrc baixado do GitHub"
-    else
-        log_aviso "Não foi possível baixar .zshrc do GitHub"
-    fi
-fi
-
-# Restaurar configuração do Powerlevel10k do backup se existir
-if [ -f "$SCRIPT_DIR/backups/zsh/.p10k.zsh" ]; then
-    log "Restaurando configuração do Powerlevel10k do backup..."
-    cp "$SCRIPT_DIR/backups/zsh/.p10k.zsh" "$HOME/.p10k.zsh"
-    log_sucesso "Arquivo .p10k.zsh restaurado"
-else
-    log_aviso "Backup de .p10k.zsh não encontrado"
-    
-    # Tentar baixar do GitHub
-    log "Tentando baixar .p10k.zsh do repositório..."
-    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/zsh/.p10k.zsh -o "$HOME/.p10k.zsh" 2>/dev/null; then
-        log_sucesso "Arquivo .p10k.zsh baixado do GitHub"
-    else
-        log_aviso "Não foi possível baixar .p10k.zsh do GitHub"
-    fi
-fi
-
-# Configurar Zsh como shell padrão
-if [ "$SHELL" != "$(which zsh)" ]; then
-    log "Configurando Zsh como shell padrão..."
-    if sudo chsh -s $(which zsh) $USER; then
-        log_sucesso "Zsh configurado como shell padrão"
-        log_aviso "Faça logout e login novamente para usar o Zsh"
-    else
-        log_aviso "Não foi possível configurar Zsh como shell padrão"
-        log "Execute manualmente: chsh -s $(which zsh)"
-    fi
-else
-    log_sucesso "Zsh já é o shell padrão"
-fi
-
-# 2b. Clonar repositório se ainda não existir
-log_separador
-log "Verificando repositório do projeto..."
+log "Clonando repositório de automações..."
 log_separador
 
 REPO_DIR="$HOME/projetos/automacoes"
 
-if [ ! -d "$REPO_DIR/.git" ]; then
-    log "Clonando repositório do GitHub..."
+if [ -d "$REPO_DIR/.git" ]; then
+    log_aviso "Repositório já existe em $REPO_DIR"
+    log "Atualizando repositório..."
+    
+    cd "$REPO_DIR"
+    if git pull origin main; then
+        log_sucesso "Repositório atualizado"
+    else
+        log_aviso "Falha ao atualizar repositório (continuando...)"
+    fi
+else
+    log "Clonando de https://github.com/rattones/automacoes.git"
     mkdir -p "$HOME/projetos"
     
     if git clone https://github.com/rattones/automacoes.git "$REPO_DIR"; then
         log_sucesso "Repositório clonado em $REPO_DIR"
-        
-        # Atualizar SCRIPT_DIR para usar o repositório clonado
-        SCRIPT_DIR="$REPO_DIR"
-        log_sucesso "Usando arquivos do repositório clonado"
     else
-        log_aviso "Falha ao clonar repositório (não é crítico)"
-        log "Continuando com download direto dos arquivos..."
-    fi
-else
-    log_sucesso "Repositório já existe em $REPO_DIR"
-    
-    # Se já existe, fazer pull para atualizar
-    cd "$REPO_DIR"
-    if git pull origin main 2>/dev/null; then
-        log_sucesso "Repositório atualizado"
-        SCRIPT_DIR="$REPO_DIR"
+        log_erro "Falha ao clonar repositório"
+        exit 1
     fi
 fi
 
-# 2c. Instalar GitHub CLI (gh) - Opcional
+# 4. Executar instalação principal do repositório
 log_separador
-echo ""
-read -p "Deseja instalar o GitHub CLI (gh)? Permite gerenciar repos, PRs, issues via terminal. (s/N): " resposta_gh
-echo ""
+log "Iniciando instalação completa..."
+log_separador
 
-if [[ "$resposta_gh" =~ ^[Ss]$ ]]; then
-    log "Instalando GitHub CLI (gh)..."
-    log_separador
+MAIN_INSTALL="$REPO_DIR/lib/post-install/main-install.sh"
+
+if [ -f "$MAIN_INSTALL" ]; then
+    log "Executando: $MAIN_INSTALL"
+    echo ""
     
-    # Adicionar repositório oficial do GitHub CLI
-    if ! command -v gh &> /dev/null; then
-        sudo mkdir -p /etc/apt/keyrings
-        
-        if curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null; then
-            sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            
-            if sudo apt update && sudo apt install -y gh; then
-                log_sucesso "GitHub CLI instalado com sucesso"
-                log "Para autenticar: gh auth login"
-            else
-                log_erro "Falha ao instalar GitHub CLI"
-            fi
-        else
-            log_erro "Falha ao adicionar repositório do GitHub CLI"
-        fi
+    # Executar script principal
+    bash "$MAIN_INSTALL"
+    EXIT_CODE=$?
+    
+    if [ $EXIT_CODE -eq 0 ]; then
+        log_separador
+        log_sucesso "INSTALAÇÃO COMPLETA CONCLUÍDA!"
+        log_separador
     else
-        log_sucesso "GitHub CLI já está instalado: $(gh --version | head -1)"
+        log_separador
+        log_erro "Instalação finalizada com erros (código: $EXIT_CODE)"
+        log_separador
+        exit $EXIT_CODE
     fi
 else
-    log_aviso "Instalação do GitHub CLI ignorada"
-fi
-
-# 2d. Instalar GitHub Copilot CLI - Opcional
-log_separador
-echo ""
-read -p "Deseja instalar o GitHub Copilot CLI? Requer GitHub Copilot ativo. (s/N): " resposta_copilot
-echo ""
-
-if [[ "$resposta_copilot" =~ ^[Ss]$ ]]; then
-    log "Instalando GitHub Copilot CLI..."
-    log_separador
-    
-    # Verificar se gh está instalado
-    if ! command -v gh &> /dev/null; then
-        log_erro "GitHub CLI (gh) não está instalado. É necessário para o Copilot CLI."
-        log "Execute novamente e instale o GitHub CLI primeiro."
-    else
-        # Instalar extensão do Copilot
-        if gh extension install github/gh-copilot; then
-            log_sucesso "GitHub Copilot CLI instalado com sucesso"
-            log "Comandos disponíveis:"
-            log "  gh copilot suggest - Sugestões de comandos"
-            log "  gh copilot explain - Explicar comandos"
-        else
-            log_aviso "Falha ao instalar GitHub Copilot CLI"
-            log "Você pode tentar instalar manualmente: gh extension install github/gh-copilot"
-        fi
-    fi
-else
-    log_aviso "Instalação do GitHub Copilot CLI ignorada"
-fi
-
-# 3. Instalar Cockpit (Web Console da Red Hat)
-log_separador
-log "Instalando Cockpit Web Console..."
-log_separador
-
-if sudo apt install -y cockpit cockpit-dashboard cockpit-podman cockpit-machines cockpit-networkmanager cockpit-packagekit cockpit-storaged; then
-    log_sucesso "Cockpit instalado com sucesso"
-    
-    # Habilitar e iniciar o serviço
-    sudo systemctl enable --now cockpit.socket
-    log_sucesso "Cockpit habilitado e iniciado"
-    log "Acesse o Cockpit em: https://$(hostname -I | awk '{print $1}'):9090"
-else
-    log_aviso "Falha ao instalar Cockpit (não é crítico)"
-fi
-
-# 4. Instalar Docker
-log_separador
-log "Instalando Docker..."
-log_separador
-
-# Remover versões antigas
-sudo apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
-
-# Instalar dependências
-sudo apt install -y ca-certificates gnupg lsb-release
-
-# Adicionar chave GPG oficial do Docker
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Configurar repositório
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Instalar Docker
-sudo apt update
-if sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
-    log_sucesso "Docker instalado com sucesso"
-else
-    log_erro "Falha ao instalar Docker"
+    log_erro "Script principal não encontrado: $MAIN_INSTALL"
+    log "Verifique se o repositório foi clonado corretamente"
     exit 1
 fi
 
-# Configurar Docker para rodar sem sudo
-log "Configurando Docker para rodar sem sudo..."
-sudo groupadd docker 2>/dev/null || true
-sudo usermod -aG docker $USER
-
-log_sucesso "Usuário $USER adicionado ao grupo docker"
-log_aviso "IMPORTANTE: Você precisa fazer logout e login novamente para usar docker sem sudo"
-log_aviso "Ou execute: newgrp docker"
-
-# Habilitar Docker na inicialização
-sudo systemctl enable docker
-log_sucesso "Docker configurado para iniciar automaticamente"
-
-# 5. Instalar Node.js (versão stable)
-log_separador
-log "Instalando Node.js (versão stable)..."
-log_separador
-
-# Instalar NVM (Node Version Manager)
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-
-# Carregar NVM
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-# Instalar versão LTS do Node.js
-if nvm install --lts; then
-    nvm use --lts
-    nvm alias default 'lts/*'
-    log_sucesso "Node.js instalado: $(node --version)"
-    log_sucesso "NPM instalado: $(npm --version)"
-else
-    log_aviso "Falha ao instalar Node.js via NVM (não é crítico)"
-fi
-
-# 6. Criar pastas e copiar arquivos compose.yml
-log_separador
-log "Criando estrutura de diretórios..."
-log_separador
-
-# Criar pasta do Home Assistant
-if [ ! -d "$HOME/haos" ]; then
-    mkdir -p "$HOME/haos"
-    log_sucesso "Pasta $HOME/haos criada"
-else
-    log_aviso "Pasta $HOME/haos já existe"
-fi
-
-# Criar pasta do Crafty
-if [ ! -d "$HOME/crafty" ]; then
-    mkdir -p "$HOME/crafty"
-    log_sucesso "Pasta $HOME/crafty criada"
-else
-    log_aviso "Pasta $HOME/crafty já existe"
-fi
-
-# Copiar compose.yml do HAOS
-if [ -f "$SCRIPT_DIR/backups/haos/compose.yml" ]; then
-    cp "$SCRIPT_DIR/backups/haos/compose.yml" "$HOME/haos/compose.yml"
-    log_sucesso "Arquivo compose.yml copiado para $HOME/haos"
-else
-    log_aviso "Arquivo de backup compose.yml do HAOS não encontrado localmente"
-    log "Tentando baixar do repositório GitHub..."
-    
-    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/haos/compose.yml -o "$HOME/haos/compose.yml"; then
-        log_sucesso "Arquivo compose.yml do HAOS baixado do GitHub"
-    else
-        log_erro "Falha ao baixar compose.yml do HAOS"
-    fi
-fi
-
-# Copiar compose.yml do Crafty
-if [ -f "$SCRIPT_DIR/backups/crafty/compose.yml" ]; then
-    cp "$SCRIPT_DIR/backups/crafty/compose.yml" "$HOME/crafty/compose.yml"
-    log_sucesso "Arquivo compose.yml copiado para $HOME/crafty"
-else
-    log_aviso "Arquivo de backup compose.yml do Crafty não encontrado localmente"
-    log "Tentando baixar do repositório GitHub..."
-    
-    if curl -fsSL https://raw.githubusercontent.com/rattones/automacoes/main/backups/crafty/compose.yml -o "$HOME/crafty/compose.yml"; then
-        log_sucesso "Arquivo compose.yml do Crafty baixado do GitHub"
-    else
-        log_erro "Falha ao baixar compose.yml do Crafty"
-    fi
-fi
-
-# 7. Iniciar containers (após adicionar usuário ao grupo docker)
-log_separador
-log "Preparando para iniciar containers..."
-log_separador
-
-log_aviso "Aplicando permissões do grupo docker..."
-newgrp docker <<EONG
-
-# Iniciar container do Home Assistant
-log_separador
-log "Iniciando container do Home Assistant..."
-log_separador
-
-if [ -f "$HOME/haos/compose.yml" ]; then
-    cd "$HOME/haos"
-    if docker compose pull && docker compose up -d; then
-        log_sucesso "Container do Home Assistant iniciado"
-        docker compose ps
-    else
-        log_erro "Falha ao iniciar container do Home Assistant"
-    fi
-else
-    log_erro "Arquivo compose.yml do HAOS não encontrado"
-fi
-
-# Iniciar container do Crafty
-log_separador
-log "Iniciando container do Crafty..."
-log_separador
-
-if [ -f "$HOME/crafty/compose.yml" ]; then
-    cd "$HOME/crafty"
-    if docker compose pull && docker compose up -d; then
-        log_sucesso "Container do Crafty iniciado"
-        docker compose ps
-    else
-        log_erro "Falha ao iniciar container do Crafty"
-    fi
-else
-    log_erro "Arquivo compose.yml do Crafty não encontrado"
-fi
-
-EONG
-
-# 8. Criar pasta projetos e restaurar backup
-log_separador
-log "Configurando pasta de projetos..."
-log_separador
-
-if [ ! -d "$HOME/projetos" ]; then
-    mkdir -p "$HOME/projetos"
-    log_sucesso "Pasta $HOME/projetos criada"
-else
-    log_aviso "Pasta $HOME/projetos já existe"
-fi
-
-# Verificar se existe backup para restaurar
-if [ -d "$SCRIPT_DIR/backups/projetos" ]; then
-    BACKUP_FILES=$(find "$SCRIPT_DIR/backups/projetos" -name "*.zip" 2>/dev/null)
-    
-    if [ -n "$BACKUP_FILES" ]; then
-        log "Backups encontrados:"
-        echo "$BACKUP_FILES"
-        
-        for backup in $BACKUP_FILES; do
-            log "Restaurando: $backup"
-            if unzip -o "$backup" -d "$HOME/projetos/"; then
-                log_sucesso "Backup restaurado: $(basename $backup)"
-            else
-                log_erro "Falha ao restaurar: $(basename $backup)"
-            fi
-        done
-    else
-        log_aviso "Nenhum backup (.zip) encontrado em $SCRIPT_DIR/backups/projetos"
-    fi
-else
-    log_aviso "Pasta de backups de projetos não encontrada"
-fi
-
-# 9. Resumo final
-log_separador
-log "RESUMO DA INSTALAÇÃO"
-log_separador
-
-echo ""
-log_sucesso "✓ Sistema atualizado"
-log_sucesso "✓ Pacotes essenciais instalados (curl, git, sqlite3)"
-log_sucesso "✓ Cockpit Web Console instalado"
-log_sucesso "✓ Docker instalado e configurado"
-log_sucesso "✓ Node.js instalado"
-log_sucesso "✓ Estrutura de diretórios criada"
-log_sucesso "✓ Containers configurados"
-log_sucesso "✓ Pasta de projetos preparada"
-echo ""
-
-log_separador
-log "INFORMAÇÕES IMPORTANTES"
-log_separador
-
-echo ""
-log "📌 Cockpit Web Console: https://$(hostname -I | awk '{print $1}'):9090"
-log "📌 Home Assistant: Verifique as portas configuradas no compose.yml"
-log "📌 Crafty Controller: http://$(hostname -I | awk '{print $1}'):8000"
-echo ""
-
-log_separador
-log "PRÓXIMOS PASSOS"
-log_separador
-
-echo ""
-log "1. Faça LOGOUT e LOGIN novamente para usar docker sem sudo"
-log "2. Ou execute: newgrp docker (temporário para esta sessão)"
-log "3. Verifique os containers: docker ps"
-log "4. Configure o sistema de automação se necessário"
-echo ""
-
-log_separador
-log "POST-INSTALAÇÃO CONCLUÍDA!"
-log_separador
-
 exit 0
+
