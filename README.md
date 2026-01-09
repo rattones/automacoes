@@ -7,6 +7,7 @@ Sistema modular de atualização automática do servidor, dividido em componente
 ```
 automacoes/
 ├── atualizar_servidor.sh          # Script orquestrador principal
+├── post-install.sh                # Script de post-instalação (executar uma vez)
 ├── lib/                           # Bibliotecas de funções
 │   ├── logging.sh                 # Sistema de logs
 │   ├── atualizar_sistema.sh       # Atualização de pacotes do SO
@@ -15,6 +16,7 @@ automacoes/
 ├── backups/                       # Backups de configurações
 │   ├── crafty/compose.yml         # Backup Crafty Controller
 │   ├── haos/compose.yml           # Backup Home Assistant
+│   ├── projetos/                  # Backups de projetos (.zip)
 │   └── README.md                  # Documentação de backups
 └── logs/                          # Logs de execução (não versionado)
 ```
@@ -61,6 +63,22 @@ automacoes/
 - `enviar_notificacao_email()` - Envia notificação por email
 
 ## Uso
+
+### Post-Instalação (Executar uma única vez)
+Para configurar um novo servidor do zero:
+```bash
+./post-install.sh
+```
+
+Este script irá:
+- Atualizar o sistema operacional
+- Instalar pacotes essenciais (curl, git, sqlite3)
+- Instalar e configurar Cockpit Web Console
+- Instalar e configurar Docker (sem necessidade de sudo)
+- Instalar Node.js (versão LTS)
+- Criar estrutura de diretórios
+- Configurar e iniciar containers (HAOS e Crafty)
+- Restaurar backups de projetos (se existirem)
 
 ### Execução Manual
 ```bash

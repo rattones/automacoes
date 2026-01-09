@@ -1,6 +1,9 @@
 # Ignorar arquivos de log
 logs/
 
+# Ignorar backups de projetos (podem ser grandes)
+backups/projetos/*.zip
+
 # Arquivos temporários
 *.tmp
 *.bak
