@@ -154,8 +154,8 @@ fi
 - [x] Atualizar `setup-docker.sh` com verificação de duplicatas
 - [x] Adicionar validação APT no script principal
 - [x] Documentar no README
-- [ ] Testar script de atualização completo
-- [ ] Criar teste unitário para detectar configurações duplicadas
+- [x] Testar script de atualização completo
+- [x] Criar teste unitário para detectar configurações duplicadas
 
 ---
 
