@@ -305,6 +305,58 @@ sudo crontab -e
 ## Logs
 Logs são salvos em: `/home/rattones/projetos/automacoes/logs/atualizacao_YYYYMMDD_HHMMSS.log`
 
+## 🛠️ Diagnóstico e Manutenção
+
+### Script de Diagnóstico APT
+
+Se você encontrar problemas com atualizações, use o script de diagnóstico:
+
+```bash
+sudo ./diagnostico_apt.sh
+```
+
+**O que ele faz:**
+- ✅ Testa funcionamento do APT
+- ✅ Detecta conflitos de repositórios
+- ✅ Identifica chaves GPG duplicadas
+- ✅ Cria backups automáticos
+- ✅ Oferece correção automática
+- ✅ Valida após correção
+
+**Problemas detectados automaticamente:**
+- 🔍 Conflitos de chaves GPG (Signed-By)
+- 🔍 Configurações duplicadas de repositórios
+- 🔍 Problemas de conectividade
+- 🔍 Chaves GPG ausentes
+- 🔍 Dependências quebradas
+
+### Validação APT Automática
+
+O script `atualizar_servidor.sh` valida automaticamente o sistema APT antes de iniciar as atualizações:
+
+1. **Verifica integridade do sistema de pacotes**
+   ```bash
+   apt-get check
+   ```
+
+2. **Testa atualização de lista de pacotes**
+   ```bash
+   apt update
+   ```
+
+3. **Diagnostica erros específicos:**
+   - Conflitos de Signed-By
+   - Problemas de rede
+   - Chaves GPG ausentes
+
+4. **Referencia diagnóstico completo**
+   - Em caso de falha, sugere executar `diagnostico_apt.sh`
+
+### Histórico de Problemas Conhecidos
+
+Para detalhes sobre problemas já resolvidos e soluções aplicadas, consulte:
+- [ANALISE_FALHAS.md](ANALISE_FALHAS.md) - Análise detalhada de falhas críticas
+
 ## Notificações por Email
 Configure a variável `EMAIL_DESTINO` no script principal para receber notificações.
 

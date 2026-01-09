@@ -152,8 +152,8 @@ fi
 
 - [x] Problema corrigido
 - [x] Atualizar `setup-docker.sh` com verificação de duplicatas
-- [ ] Adicionar validação APT no script principal
-- [ ] Documentar no README
+- [x] Adicionar validação APT no script principal
+- [x] Documentar no README
 - [ ] Testar script de atualização completo
 - [ ] Criar teste unitário para detectar configurações duplicadas
 
