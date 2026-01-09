@@ -1,6 +1,31 @@
 # Sistema de Automação de Atualização do Servidor
 
-Sistema modular de atualização automática do servidor, dividido em componentes reutilizáveis.
+Sistema modular de atualização automática do servidor, dividido em componentes reutilizáveis com testes unitários automatizados.
+
+## 🧪 Testes Unitários
+
+O projeto inclui uma suíte completa de testes automatizados usando **BATS** (Bash Automated Testing System).
+
+### Executar Testes
+
+```bash
+cd tests
+./run_tests.sh
+```
+
+**Cobertura dos testes:**
+- ✅ Estrutura do projeto (18 testes)
+- ✅ Bootstrap de instalação (6 testes)  
+- ✅ Módulos de post-install (16 testes)
+- ✅ Biblioteca de logging (10 testes)
+- ✅ Sistema de atualização (7 testes)
+- ✅ Atualização de containers (7 testes)
+
+**Total: 64 testes automatizados**
+
+Para mais detalhes, consulte: [tests/README.md](tests/README.md)
+
+---
 
 ## 🚀 Guia de Instalação Inicial
 
