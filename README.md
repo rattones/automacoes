@@ -397,7 +397,23 @@ cd tests
 - ✅ Biblioteca de logging (10 testes)
 - ✅ Sistema de atualização (7 testes)
 - ✅ Atualização de containers (7 testes)
+- ✅ Detecção de duplicatas APT (16 testes)
 
-**Total: 64 testes automatizados**
+**Total: 80 testes automatizados**
 
 Para mais detalhes, consulte: [tests/README.md](tests/README.md)
+
+---
+
+## 🤖 Sobre o Projeto
+
+Este projeto foi **inteiramente gerado por IA** utilizando **GitHub Copilot** (Claude Sonnet 4.5) e supervisionado pelo analista de sistemas **[Renato Atton](https://github.com/rattones)**.
+
+A abordagem de desenvolvimento assistido por IA permitiu:
+- Código modular e bem estruturado
+- Cobertura completa de testes automatizados
+- Documentação detalhada e atualizada
+- Análise proativa de falhas e implementação de soluções preventivas
+
+**Desenvolvido por:** GitHub Copilot  
+**Supervisionado por:** [@rattones](https://github.com/rattones) - Analista de Sistemas
