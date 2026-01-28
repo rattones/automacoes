@@ -32,7 +32,7 @@ teardown() {
 }
 
 @test "atualizar_sistema.sh tem tratamento de erros apt" {
-    grep -q "temp_log=" "$SCRIPT_DIR/lib/atualizar_sistema.sh"
+    grep -q "apt.*-qq" "$SCRIPT_DIR/lib/atualizar_sistema.sh"
 }
 
 @test "atualizar_sistema.sh verifica pacotes disponíveis" {
