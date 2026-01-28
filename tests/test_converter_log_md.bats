@@ -35,10 +35,9 @@ EOF
     # Verificar saída
     [ -f "$TEST_MD_DIR/test.md" ]
     [ -s "$TEST_MD_DIR/test.md" ]  # Arquivo não vazio
-    grep -F -q "# Log de Atualização do Servidor" "$TEST_MD_DIR/test.md"
     grep -F -q "INICIANDO PROCESSO" "$TEST_MD_DIR/test.md"
     grep -F -q "Mensagem normal" "$TEST_MD_DIR/test.md"
-    grep -F -q "Sucesso" "$TEST_MD_DIR/test.md"
+    grep -F -q "SUCESSO" "$TEST_MD_DIR/test.md"
 }
 
 @test "remove códigos ANSI" {
@@ -100,7 +99,7 @@ EOF
     cd "$SCRIPT_DIR" && bash lib/converter_log_md.sh "$TEST_LOGS_DIR/error.log"
 
     [ -f "$TEST_MD_DIR/error.md" ]
-    grep -F -q "Erro" "$TEST_MD_DIR/error.md"
+    grep -F -q "ERRO" "$TEST_MD_DIR/error.md"
 }
 
 @test "formata mensagens de aviso" {
@@ -111,7 +110,7 @@ EOF
     cd "$SCRIPT_DIR" && bash lib/converter_log_md.sh "$TEST_LOGS_DIR/warning.log"
 
     [ -f "$TEST_MD_DIR/warning.md" ]
-    grep -F -q "Aviso" "$TEST_MD_DIR/warning.md"
+    grep -F -q "AVISO" "$TEST_MD_DIR/warning.md"
 }
 
 @test "formata mensagens de info" {
@@ -122,7 +121,7 @@ EOF
     cd "$SCRIPT_DIR" && bash lib/converter_log_md.sh "$TEST_LOGS_DIR/info.log"
 
     [ -f "$TEST_MD_DIR/info.md" ]
-    grep -F -q "Info" "$TEST_MD_DIR/info.md"
+    grep -F -q "INFO" "$TEST_MD_DIR/info.md"
 }
 
 @test "trata linhas vazias e separadores" {

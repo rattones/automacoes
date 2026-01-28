@@ -7,8 +7,8 @@
 
 # Diretório base do script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOGS_DIR="$SCRIPT_DIR/../logs"
-LOGS_MD_DIR="$SCRIPT_DIR/../logs_md"
+LOGS_DIR="${LOGS_DIR:-$SCRIPT_DIR/../logs}"
+LOGS_MD_DIR="${LOGS_MD_DIR:-$SCRIPT_DIR/../logs_md}"
 
 # Verificar se o diretório de logs existe
 if [ ! -d "$LOGS_DIR" ]; then
@@ -140,8 +140,8 @@ process_table() {
     while IFS= read -r line; do
         # Remover códigos ANSI
         clean_line=$(echo "$line" | sed 's/\x1b\[[0-9;]*m//g')
-        # Remover timestamp se presente
-        clean_line=$(echo "$clean_line" | sed 's/^\[.*\] //')
+        # Remover timestamps [YYYY-MM-DD HH:MM:SS]
+        clean_line=$(echo "$clean_line" | sed 's/\[20[0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]\]//g')
 
         if [[ "$clean_line" == ========================================== ]]; then
             # Separador principal - ignorar ou usar para quebra
@@ -174,6 +174,11 @@ process_table() {
             process_line "$clean_line"
         fi
     done < "$log_file"
+
+    # Processar tabela se ainda aberta
+    if [ $in_table -eq 1 ]; then
+        process_table
+    fi
 
     echo "" >> "$md_file"
     echo "---" >> "$md_file"
