@@ -126,8 +126,8 @@ O script de post-instalação é modular e funciona em duas etapas:
 - ✅ Pacotes essenciais (curl, git, sqlite3, zsh, openssh-server)
 - ✅ SSH Server para acesso remoto
 - ✅ Zsh com Oh My Zsh e tema Powerlevel10k
-- 🔹 GitHub CLI (gh) - Opcional
-- 🔹 GitHub Copilot CLI - Opcional (requer gh)
+- ✅ GitHub CLI (gh) - Opcional
+- ✅ GitHub Copilot CLI - Opcional (requer gh)
 - ✅ Cockpit Web Console (acesso web: https://[IP]:9090)
 - ✅ Docker + Docker Compose (sem necessidade de sudo)
 - ✅ Node.js LTS (via NVM)
