@@ -1,5 +1,6 @@
 # Ignorar arquivos de log
 logs/
+logs_md/
 
 # Ignorar backups de projetos (podem ser grandes)
 backups/projetos/*.zip
