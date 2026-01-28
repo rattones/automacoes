@@ -173,6 +173,7 @@ automacoes/
 │   ├── atualizar_container.sh     # Atualização de containers Docker
 │   ├── atualizar_nodejs.sh        # Atualização de Node.js, NVM e npm
 │   ├── verificar_sistema.sh       # Verificações e estatísticas
+│   ├── converter_log_md.sh        # Conversor de logs para Markdown
 │   └── post-install/              # Módulos de instalação inicial
 │       ├── main-install.sh        # Orquestrador da instalação
 │       ├── setup-ssh.sh           # SSH Server
@@ -305,6 +306,13 @@ sudo crontab -e
 ## Logs
 Logs são salvos em: `/home/rattones/projetos/automacoes/logs/atualizacao_YYYYMMDD_HHMMSS.log`
 
+### Visualização de Logs
+Para visualizar logs em formato Markdown (mais legível):
+```bash
+./lib/converter_log_md.sh logs/atualizacao_20240128_030000.log
+```
+Os arquivos convertidos ficam em: `/home/rattones/projetos/automacoes/logs-md/`
+
 ## 🛠️ Diagnóstico e Manutenção
 
 ### Script de Diagnóstico APT
@@ -379,6 +387,54 @@ atualizar_container "MeuApp" "/home/user/meuapp"
 
 ---
 
+## 🛠️ Ferramentas Adicionais
+
+### Conversor de Logs para Markdown
+
+O script `converter_log_md.sh` converte arquivos de log em formato Markdown para melhor visualização e compartilhamento.
+
+#### Uso Básico
+```bash
+# Converter log específico
+./lib/converter_log_md.sh logs/atualizacao_20240128_030000.log
+
+# Converter último log (padrão)
+./lib/converter_log_md.sh
+```
+
+#### Funcionalidades
+- ✅ **Remoção de códigos ANSI** - Remove cores e formatação do terminal
+- ✅ **Detecção de tabelas** - Converte tabelas Docker (ps, stats) para Markdown
+- ✅ **Formatação de mensagens** - Destaque para [SUCESSO], [ERRO], [AVISO], [INFO]
+- ✅ **Estrutura organizada** - Headers, separadores e formatação limpa
+- ✅ **Diretório automático** - Cria pasta `logs-md/` para arquivos convertidos
+
+#### Exemplo de Saída
+```markdown
+# Log de Atualização - 2024-01-28 03:00:00
+
+## ✅ SUCESSO
+Lista de pacotes atualizada com sucesso
+
+## 📊 Containers Docker
+| CONTAINER ID | IMAGE | STATUS | PORTS | NAMES |
+|--------------|-------|--------|-------|-------|
+| abc123def456 | crafty:latest | Up 2 hours | 0.0.0.0:8000->8000/tcp | crafty |
+| def456ghi789 | homeassistant:latest | Up 2 hours | 0.0.0.0:8123->8123/tcp | haos |
+
+## ✅ SUCESSO
+Atualização do sistema concluída
+```
+
+#### Configuração
+As variáveis podem ser personalizadas:
+```bash
+export LOGS_DIR="/caminho/dos/logs"          # Diretório de logs fonte
+export LOGS_MD_DIR="/caminho/dos/logs-md"    # Diretório de saída
+```
+
+---
+
 ## 🧪 Testes Unitários
 
 O projeto inclui uma suíte completa de testes automatizados usando **BATS** (Bash Automated Testing System).
@@ -397,9 +453,10 @@ cd tests
 - ✅ Biblioteca de logging (10 testes)
 - ✅ Sistema de atualização (7 testes)
 - ✅ Atualização de containers (7 testes)
+- ✅ Conversor de logs para Markdown (11 testes)
 - ✅ Detecção de duplicatas APT (16 testes)
 
-**Total: 80 testes automatizados**
+**Total: 91 testes automatizados**
 
 Para mais detalhes, consulte: [tests/README.md](tests/README.md)
 
