@@ -174,6 +174,7 @@ automacoes/
 │   ├── atualizar_nodejs.sh        # Atualização de Node.js, NVM e npm
 │   ├── verificar_sistema.sh       # Verificações e estatísticas
 │   ├── converter_log_md.sh        # Conversor de logs para Markdown
+│   ├── backup_configs.sh          # Backup de configurações dos containers
 │   └── post-install/              # Módulos de instalação inicial
 │       ├── main-install.sh        # Orquestrador da instalação
 │       ├── setup-ssh.sh           # SSH Server
@@ -435,6 +436,60 @@ export LOGS_MD_DIR="/caminho/dos/logs-md"    # Diretório de saída
 
 ---
 
+## 💾 Backup de Configurações
+
+O sistema inclui funcionalidade automática de backup das configurações dos containers gerenciados.
+
+### Funcionalidades de Backup
+- ✅ **Backup automático** - Configurações salvas antes das atualizações
+- ✅ **Múltiplos formatos** - Arquivos individuais e pacotes tar.gz
+- ✅ **Estrutura organizada** - Backups separados por container
+- ✅ **Histórico preservado** - Múltiplas versões mantidas
+- ✅ **Containers suportados** - Crafty Controller e Home Assistant
+
+### Estrutura de Backups
+```
+backups/
+├── crafty/
+│   ├── compose.yml                 # Backup do docker-compose
+│   ├── test.cfg                    # Arquivos de configuração
+│   └── ...                         # Outros arquivos de config
+└── haos/
+    ├── compose.yml                 # Backup do docker-compose
+    ├── homeassistant_config_20240128_030000.tar.gz  # Config completo
+    └── ...                         # Outros backups
+```
+
+### Como Usar
+```bash
+# Carregar bibliotecas necessárias
+source lib/logging.sh
+source lib/backup_configs.sh
+
+# Fazer backup de um container específico
+backup_container_config "Crafty" "/home/rattones/crafty"
+backup_container_config "Home Assistant" "/home/rattones/haos"
+
+# Fazer backup de todos os containers
+declare -a CONTAINERS=(
+    "Crafty" "/home/rattones/crafty"
+    "Home Assistant" "/home/rattones/haos"
+)
+backup_todas_configs
+
+# Listar backups existentes
+listar_backups
+```
+
+### Pastas de Configuração
+- **Crafty Controller**: `docker/config/` (mapeado para `/crafty/app/config`)
+- **Home Assistant**: `config/` ou `/home/rattones/.homeassistant` ou `/config`
+
+### Integração com Atualização
+O backup é executado automaticamente durante o processo de atualização do servidor para preservar as configurações antes de possíveis mudanças.
+
+---
+
 ## 🧪 Testes Unitários
 
 O projeto inclui uma suíte completa de testes automatizados usando **BATS** (Bash Automated Testing System).
@@ -454,9 +509,10 @@ cd tests
 - ✅ Sistema de atualização (7 testes)
 - ✅ Atualização de containers (7 testes)
 - ✅ Conversor de logs para Markdown (11 testes)
+- ✅ Backup de configurações (16 testes)
 - ✅ Detecção de duplicatas APT (16 testes)
 
-**Total: 91 testes automatizados**
+**Total: 107 testes automatizados**
 
 Para mais detalhes, consulte: [tests/README.md](tests/README.md)
 

@@ -64,6 +64,10 @@ setup() {
     [ -f "$PROJECT_DIR/lib/verificar_sistema.sh" ]
 }
 
+@test "biblioteca backup_configs.sh existe" {
+    [ -f "$PROJECT_DIR/lib/backup_configs.sh" ]
+}
+
 @test "backups/crafty/compose.yml existe" {
     [ -f "$PROJECT_DIR/backups/crafty/compose.yml" ]
 }
