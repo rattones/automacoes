@@ -9,9 +9,9 @@ atualizar_container() {
     local nome="$1"
     local diretorio="$2"
     
-    log_separador
-    log "Atualizando container: $nome"
-    log_separador
+    log_subseparador
+    log_indent "Atualizando container: $nome"
+    log_subseparador
     
     # Verificar se o diretório existe
     if [ ! -d "$diretorio" ]; then
@@ -35,15 +35,15 @@ atualizar_container() {
     local dir_original=$(pwd)
     
     # Entrar no diretório do container
-    log "Acessando diretório: $diretorio"
+    log_indent "Acessando diretório: $diretorio"
     cd "$diretorio" || {
         log_erro "Não foi possível acessar o diretório $diretorio"
         return 1
     }
     
     # Fazer pull das imagens
-    log "Baixando imagens atualizadas..."
-    if docker compose pull >> "$LOG_FILE" 2>&1; then
+    log_indent "Baixando imagens atualizadas..."
+    if docker compose pull --quiet >> "$LOG_FILE" 2>&1; then
         log_sucesso "Imagens de $nome atualizadas com sucesso"
     else
         log_erro "Falha ao fazer pull das imagens de $nome"
@@ -52,7 +52,7 @@ atualizar_container() {
     fi
     
     # Reiniciar containers
-    log "Reiniciando containers de $nome..."
+    log_indent "Reiniciando containers de $nome..."
     if docker compose up -d >> "$LOG_FILE" 2>&1; then
         log_sucesso "Containers de $nome reiniciados com sucesso"
     else
@@ -63,7 +63,7 @@ atualizar_container() {
     
     # Aguardar e verificar status
     sleep 5
-    log "Status dos containers de $nome:"
+    log_indent "Status dos containers de $nome:"
     docker compose ps >> "$LOG_FILE" 2>&1
     docker compose ps | tee -a "$LOG_FILE"
     

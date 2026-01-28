@@ -41,6 +41,21 @@ log_separador() {
     log "=========================================="
 }
 
+# Função para sub-separador (para subseções)
+log_subseparador() {
+    log "------------------------------------------"
+}
+
+# Função para logging indentado
+log_indent() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')]   $1" | tee -a "$LOG_FILE"
+}
+
+# Função para logging de progresso
+log_progresso() {
+    echo -e "${AZUL}[PROGRESSO][$(date '+%Y-%m-%d %H:%M:%S')] $1${NC}" | tee -a "$LOG_FILE"
+}
+
 # Função para inicializar log
 inicializar_log() {
     local log_dir="$1"
