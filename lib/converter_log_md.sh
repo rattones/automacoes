@@ -50,7 +50,93 @@ convert_log_to_md() {
         echo ""
     } > "$md_file"
 
+# Função para processar uma linha normal
+process_line() {
+    local clean_line="$1"
+    if [[ "$clean_line" =~ ^\[SUCESSO\]\[.*\] ]]; then
+        # Sucesso
+        message=$(echo "$clean_line" | sed 's/\[SUCESSO\]\[.*\] //')
+        echo "- ✅ **Sucesso:** $message" >> "$md_file"
+    elif [[ "$clean_line" =~ ^\[ERRO\]\[.*\] ]]; then
+        # Erro
+        message=$(echo "$clean_line" | sed 's/\[ERRO\]\[.*\] //')
+        echo "- ❌ **Erro:** $message" >> "$md_file"
+    elif [[ "$clean_line" =~ ^\[AVISO\]\[.*\] ]]; then
+        # Aviso
+        message=$(echo "$clean_line" | sed 's/\[AVISO\]\[.*\] //')
+        echo "- ⚠️ **Aviso:** $message" >> "$md_file"
+    elif [[ "$clean_line" =~ ^\[INFO\]\[.*\] ]]; then
+        # Info
+        message=$(echo "$clean_line" | sed 's/\[INFO\]\[.*\] //')
+        echo "- ℹ️ **Info:** $message" >> "$md_file"
+    elif [[ "$clean_line" =~ ^   ]]; then
+        # Mensagem indentada
+        message=$(echo "$clean_line" | sed 's/^   //')
+        echo "  - $message" >> "$md_file"
+    else
+        # Outras mensagens
+        if [ -n "$clean_line" ]; then
+            echo "- $clean_line" >> "$md_file"
+        fi
+    fi
+}
+
+# Função para processar tabela de containers
+process_table() {
+    if [ ${#table_lines[@]} -lt 2 ]; then
+        # Não há dados suficientes
+        return
+    fi
+
+    # Remover duplicatas consecutivas
+    local unique_lines=()
+    local prev=""
+    for line in "${table_lines[@]}"; do
+        if [ "$line" != "$prev" ]; then
+            unique_lines+=("$line")
+            prev="$line"
+        fi
+    done
+    table_lines=("${unique_lines[@]}")
+
+    if [ ${#table_lines[@]} -lt 2 ]; then
+        return
+    fi
+
+    # Primeira linha é o título
+    echo "- ${table_lines[0]}" >> "$md_file"
+
+    # Segunda linha é o cabeçalho
+    local header="${table_lines[1]}"
+    # Dividir por múltiplos espaços
+    IFS=$'\n' read -r -d '' -a columns <<< "$(echo "$header" | sed 's/[[:space:]]\{2,\}/\n/g')"
+    # Criar linha de cabeçalho
+    local md_header="|"
+    local md_sep="|"
+    for col in "${columns[@]}"; do
+        md_header="$md_header $col |"
+        md_sep="$md_sep --- |"
+    done
+    echo "$md_header" >> "$md_file"
+    echo "$md_sep" >> "$md_file"
+
+    # Linhas de dados
+    for ((i=2; i<${#table_lines[@]}; i++)); do
+        local row="${table_lines[$i]}"
+        IFS=$'\n' read -r -d '' -a row_cols <<< "$(echo "$row" | sed 's/[[:space:]]\{2,\}/\n/g')"
+        local md_row="|"
+        for col in "${row_cols[@]}"; do
+            md_row="$md_row $col |"
+        done
+        echo "$md_row" >> "$md_file"
+    done
+
+    echo "" >> "$md_file"
+}
+
     # Processar o log linha por linha
+    local in_table=0
+    local table_lines=()
     while IFS= read -r line; do
         # Remover códigos ANSI
         clean_line=$(echo "$line" | sed 's/\x1b\[[0-9;]*m//g')
@@ -63,31 +149,29 @@ convert_log_to_md() {
         elif [[ "$clean_line" == ------------------------------------------ ]]; then
             # Separador sub - ignorar
             :
-        elif [[ "$clean_line" =~ ^\[SUCESSO\]\[.*\] ]]; then
-            # Sucesso
-            message=$(echo "$clean_line" | sed 's/\[SUCESSO\]\[.*\] //')
-            echo "- ✅ **Sucesso:** $message" >> "$md_file"
-        elif [[ "$clean_line" =~ ^\[ERRO\]\[.*\] ]]; then
-            # Erro
-            message=$(echo "$clean_line" | sed 's/\[ERRO\]\[.*\] //')
-            echo "- ❌ **Erro:** $message" >> "$md_file"
-        elif [[ "$clean_line" =~ ^\[AVISO\]\[.*\] ]]; then
-            # Aviso
-            message=$(echo "$clean_line" | sed 's/\[AVISO\]\[.*\] //')
-            echo "- ⚠️ **Aviso:** $message" >> "$md_file"
-        elif [[ "$clean_line" =~ ^\[INFO\]\[.*\] ]]; then
-            # Info
-            message=$(echo "$clean_line" | sed 's/\[INFO\]\[.*\] //')
-            echo "- ℹ️ **Info:** $message" >> "$md_file"
-        elif [[ "$clean_line" =~ ^   ]]; then
-            # Mensagem indentada
-            message=$(echo "$clean_line" | sed 's/^   //')
-            echo "  - $message" >> "$md_file"
-        else
-            # Outras mensagens
-            if [ -n "$clean_line" ]; then
-                echo "- $clean_line" >> "$md_file"
+        elif [[ "$clean_line" =~ "Status dos containers de" ]]; then
+            # Início de tabela de containers
+            in_table=1
+            table_lines=("$clean_line")
+        elif [ $in_table -eq 1 ]; then
+            if [[ "$clean_line" =~ ^[[:space:]]*$ ]]; then
+                # Linha vazia - fim da tabela
+                process_table
+                in_table=0
+                table_lines=()
+            elif [[ "$clean_line" =~ [[:space:]]{2,} ]]; then
+                # Linha com múltiplos espaços - parte da tabela
+                table_lines+=("$clean_line")
+            else
+                # Fim da tabela
+                process_table
+                in_table=0
+                table_lines=()
+                # Processar a linha atual normalmente
+                process_line "$clean_line"
             fi
+        else
+            process_line "$clean_line"
         fi
     done < "$log_file"
 
