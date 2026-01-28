@@ -5,6 +5,76 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.1.0] - 2026-01-28
+
+### ✨ Novas Funcionalidades
+
+#### 📝 Conversor de Logs para Markdown
+- **Novo script**: `lib/converter_log_md.sh`
+- **Funcionalidades**:
+  - Conversão automática de logs para formato Markdown
+  - Remoção de códigos ANSI (cores do terminal)
+  - Detecção e formatação de tabelas Docker
+  - Destaque de mensagens especiais ([SUCESSO], [ERRO], [AVISO])
+  - Criação automática de diretório `logs-md/`
+- **Uso**: `./lib/converter_log_md.sh logs/atualizacao_20240128.log`
+
+#### 💾 Sistema de Backup de Configurações
+- **Novo script**: `lib/backup_configs.sh`
+- **Funcionalidades**:
+  - Backup automático de configurações dos containers
+  - Suporte a Crafty Controller (`docker/config/`)
+  - Suporte a Home Assistant (`config/` com tar.gz)
+  - Backup de arquivos `compose.yml`
+  - Histórico com timestamps
+  - Integração com processo de atualização
+- **Containers suportados**: Crafty e Home Assistant
+
+#### 🧪 Expansão da Suíte de Testes
+- **Novos testes**: `test_backup_configs.bats` (16 testes)
+- **Cobertura expandida**: Conversor de logs (11 testes)
+- **Total atual**: 107 testes automatizados
+- **Melhorias**: Testes mais robustos com mocks isolados
+
+### 🔧 Melhorias
+
+#### Sistema de Logs
+- **Correção**: Tratamento de erros APT com `apt -qq`
+- **Melhoria**: Remoção de variáveis temporárias desnecessárias
+- **Validação**: Testes atualizados para refletir mudanças
+
+#### Documentação
+- **README.md**: Seção completa sobre conversor de logs
+- **README.md**: Seção sobre backup de configurações
+- **Estrutura**: Atualização da árvore de arquivos
+- **Contagem**: Estatísticas atualizadas (107 testes)
+
+### 🐛 Correções
+
+#### Testes
+- **Correção**: Teste de tratamento de erros APT atualizado
+- **Validação**: Todos os 107 testes passando
+- **Estrutura**: Novo teste incluído na validação de estrutura
+
+### 📊 Estatísticas Atualizadas
+
+- **Scripts principais**: 3 (post-install, atualizar_servidor, diagnostico_apt)
+- **Módulos**: 9 (1 orquestrador + 8 especializados)
+- **Bibliotecas**: 7 (logging, sistema, container, nodejs, verificar, converter, backup)
+- **Ferramentas**: 2 (diagnostico_apt, converter_log_md)
+- **Testes**: 107 automatizados
+- **Linhas de código**: ~3.000+
+- **Commits**: 25 até esta release
+
+### 🔗 Links
+
+- [Repositório GitHub](https://github.com/rattones/automacoes)
+- [Documentação Completa](README.md)
+- [Análise de Falhas](ANALISE_FALHAS.md)
+- [Testes](tests/README.md)
+
+---
+
 ## [1.0.0] - 2026-01-09
 
 ### 🎉 Primeira Release Oficial
