@@ -13,3 +13,4 @@ backups/projetos/*.zip
 # Arquivos do sistema
 .DS_Store
 Thumbs.db
+TODO_ATUALIZACOES.md
