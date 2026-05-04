@@ -34,6 +34,7 @@ MODULOS=(
     "setup-nodejs.sh:Node.js (NVM)"
     "setup-containers.sh:Containers (Crafty, HAOS)"
     "setup-projects.sh:Restauração de Projetos"
+    "setup-monitor.sh:Monitor Web do Servidor"
 )
 
 # Executar cada módulo
@@ -76,6 +77,7 @@ log_sucesso "✓ Docker instalado e configurado"
 log_sucesso "✓ Node.js instalado via NVM"
 log_sucesso "✓ Containers configurados (Crafty, HAOS)"
 log_sucesso "✓ Projetos restaurados"
+log_sucesso "✓ Monitor Web instalado (porta 8180)"
 echo ""
 
 log_separador

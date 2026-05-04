@@ -14,3 +14,18 @@ backups/projetos/*.zip
 .DS_Store
 Thumbs.db
 TODO_ATUALIZACOES.md
+
+# ── Monitor Web ──────────────────────────────────────────
+# Dados sensíveis: SECRET_KEY e configurações de ambiente
+monitor/.env
+
+# Ambiente virtual Python (gerado pelo setup.sh, não deve ser versionado)
+monitor/.venv/
+
+# Cache Python
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Script temporário gerado em runtime pelo server.py
+monitor/_run_update_container.sh
