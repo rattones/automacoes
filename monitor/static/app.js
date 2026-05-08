@@ -249,15 +249,18 @@ async function carregarStatus() {
   // Núcleos individuais
   const coresList = $('#cpu-cores-list');
   if (coresList) {
-    const cores = cpu.cores ?? [];
+    const cores = (cpu.cores ?? []).slice().sort((a, b) => a.id - b.id);
     coresList.innerHTML = cores.map(c => {
       const nivelClass = c.uso >= 90 ? 'nivel-critico' : c.uso >= 70 ? 'nivel-aviso' : '';
-      const tempStr = c.temp != null ? `${c.temp}°C` : '';
-      return `<div class="core-item">
-        <span class="core-label">C${c.id}</span>
-        <div class="core-bar-wrap"><div class="core-bar ${nivelClass}" style="width:${c.uso.toFixed(1)}%"></div></div>
-        <span class="core-uso">${c.uso}%</span>
-        <span class="core-temp">${tempStr}</span>
+      const usoStyle   = c.uso >= 90 ? 'color:var(--vermelho)' : c.uso >= 70 ? 'color:var(--amarelo)' : '';
+      const tempStr    = c.temp != null ? `${c.temp}\u00b0C` : '';
+      return `<div class="core-tile">
+        <div class="core-tile-row">
+          <span class="core-tile-label">C${c.id}</span>
+          <span class="core-tile-uso" style="${usoStyle}">${c.uso}%</span>
+        </div>
+        <div class="core-tile-bar-wrap"><div class="core-tile-bar ${nivelClass}" style="width:${c.uso.toFixed(1)}%"></div></div>
+        ${tempStr ? `<span class="core-tile-temp">${tempStr}</span>` : ''}
       </div>`;
     }).join('');
   }
