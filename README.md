@@ -135,6 +135,7 @@ O script de post-instalação é modular e funciona em duas etapas:
 - ✅ Containers: Home Assistant e Crafty Controller
 - ✅ Restauração automática de backups de projetos
 - ✅ Restauração de configurações do Zsh (.zshrc e .p10k.zsh)
+- ✅ Monitor web do servidor (porta 8180)
 
 **Tempo estimado:** 10-20 minutos (depende da velocidade da internet)
 
@@ -184,7 +185,15 @@ automacoes/
 │       ├── setup-docker.sh        # Docker + Docker Compose
 │       ├── setup-nodejs.sh        # Node.js via NVM
 │       ├── setup-containers.sh    # Deploy containers
-│       └── setup-projects.sh      # Restauração de backups
+│       ├── setup-projects.sh      # Restauração de backups
+│       └── setup-monitor.sh       # Monitor web do servidor
+├── monitor/                       # Painel web de monitoramento
+│   ├── server.py                  # Backend Flask (porta 8180)
+│   ├── setup.sh                   # Instalação do monitor
+│   ├── requirements.txt           # Dependências Python
+│   ├── templates/index.html       # Interface web (SPA)
+│   ├── static/                    # CSS, JS, favicons
+│   └── scripts/                   # Scripts de coleta de métricas
 ├── backups/                       # Backups de configurações
 │   ├── crafty/compose.yml         # Backup Crafty Controller
 │   ├── haos/compose.yml           # Backup Home Assistant
@@ -458,6 +467,106 @@ backups/
     ├── compose.yml                 # Backup do docker-compose
     ├── homeassistant_config_20240128_030000.tar.gz  # Config completo
     └── ...                         # Outros backups
+```
+
+---
+
+## 🖥️ Monitor Web do Servidor
+
+Painel web de monitoramento em tempo real, acessível pelo browser, com autenticação PAM e atualização automática.
+
+### Acesso
+```
+http://[IP-do-servidor]:8180
+```
+Login com usuário e senha do sistema operacional.
+
+### Instalação
+```bash
+bash monitor/setup.sh
+```
+O script instala dependências Python, cria o serviço systemd e o inicia automaticamente.
+
+### Funcionalidades
+
+#### Aba Métricas
+- **CPU**: gauge de uso global + grade de tiles por núcleo (uso % e temperatura via coretemp)
+- **GPU**: tiles por GPU detectada via `lshw -C video` — barra de uso, temperatura, memória usada/total, versão do driver. Suporte a NVIDIA (nvidia-smi), AMD (amdgpu sysfs) e Nouveau
+- **RAM**: gauge global + listagem de DIMMs via `dmidecode` (slot, tamanho, tipo DDR, fabricante, velocidade)
+- **Disco**: barra de uso por ponto de montagem
+- **Sistema**: hostname, kernel, uptime, load average
+
+#### Aba Rede
+- Tabela de interfaces (estado, MAC, IPs, velocidade rx/tx em Mbps)
+- Tabela de portas em escuta com filtro por porta/processo/serviço
+
+#### Aba Serviços
+- Lista de serviços systemd monitorados com estado, versão e ações (reiniciar, parar, recarregar)
+- Detecção de atualizações disponíveis via apt
+
+#### Aba Containers
+- Lista de containers Docker com estado e ações (start, stop, restart)
+- Atualização de imagem via `docker pull` + `compose up`
+
+#### Header
+| Botão | Cor | Ação |
+|-------|-----|------|
+| ↻ | cinza | Refresh manual imediato |
+| ↻ Monitor | amarelo | Reinicia `monitor-servidor.service` (pede sudo) |
+| ⏻ Servidor | vermelho | Reinicia o servidor inteiro (pede sudo) |
+| Sair | cinza | Encerra a sessão |
+
+### Estrutura
+```
+monitor/
+├── server.py                # Backend Flask (porta 8180, auth PAM)
+├── setup.sh                 # Script de instalação
+├── requirements.txt         # Dependências Python
+├── .env.example             # Exemplo de configuração
+├── templates/
+│   └── index.html           # SPA Jinja2
+├── static/
+│   ├── app.js               # Frontend Vanilla JS
+│   ├── style.css            # Dark theme CSS
+│   ├── favicon.svg          # Ícone SVG
+│   └── favicon.ico          # Ícone ICO
+└── scripts/
+    ├── get_status.sh        # CPU, GPU, RAM, disco, sistema
+    ├── get_network.sh       # Interfaces e portas
+    ├── get_services.sh      # Serviços systemd
+    ├── get_containers.sh    # Containers Docker
+    ├── service_action.sh    # Ações em serviços
+    └── container_action.sh  # Ações em containers
+```
+
+### Segurança
+- Autenticação PAM (usuário real do SO)
+- Rate limiting de login: 5 tentativas / 5 minutos
+- Validação de entradas com regex whitelist
+- Ações destrutivas exigem confirmação com senha sudo (nunca armazenada)
+- `SESSION_COOKIE_HTTPONLY=True`, `SESSION_COOKIE_SAMESITE=Lax`
+- Scripts executados via `subprocess.run` com lista de argumentos (sem shell injection)
+
+### Serviço systemd
+```bash
+# Ver status
+systemctl status monitor-servidor.service
+
+# Reiniciar após mudanças no código
+sudo systemctl restart monitor-servidor.service
+
+# Ver logs em tempo real
+journalctl -u monitor-servidor.service -f
+```
+
+### Dependências adicionais
+```bash
+# Para leitura de DIMMs
+sudo apt install -y dmidecode
+
+# Regra sudoers (criada pelo setup.sh)
+# /etc/sudoers.d/monitor-dmidecode
+# rattones ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode
 ```
 
 ### Como Usar

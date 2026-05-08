@@ -5,6 +5,73 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.2.0] - 2026-05-08
+
+### ✨ Novas Funcionalidades
+
+#### 🖥️ Monitor Web do Servidor
+- **Novo módulo**: `monitor/` — painel web completo acessível em `http://[IP]:8180`
+- **Backend**: Flask com autenticação PAM (usuário real do sistema)
+- **Frontend**: Vanilla JS, dark mode, atualização automática (5s métricas / 15s abas)
+- **Serviço systemd**: `monitor-servidor.service` (habilitado e persistente)
+
+**Aba Métricas:**
+- CPU: gauge global + grade de tiles por núcleo com uso % e temperatura (coretemp)
+- GPU: tiles individuais por GPU via `sudo lshw -C video`; barra de uso, temperatura, memória e versão do driver. Suporte a NVIDIA (nvidia-smi), AMD (amdgpu sysfs) e Nouveau
+- RAM: gauge global + DIMMs via `sudo dmidecode --type 17` (slot, tipo DDR, tamanho, fabricante, velocidade)
+- Disco: barras de uso por ponto de montagem
+- Sistema: hostname, kernel, uptime, load average
+
+**Aba Rede:**
+- Tabela de interfaces com estado, MAC, IPs, velocidade rx/tx em Mbps
+- Tabela de portas em escuta com filtro por porta/processo/serviço
+
+**Aba Serviços:**
+- Lista de serviços systemd com estado, versão e ações (reiniciar, parar, recarregar)
+- Detecção de atualizações disponíveis via apt
+
+**Aba Containers:**
+- Lista de containers Docker com estado e ações (start, stop, restart)
+- Atualização de imagem via `docker pull` + `compose up`
+
+**Header:**
+- Botão de refresh manual
+- Botão **Reiniciar Monitor** (amarelo): reinicia `monitor-servidor.service` via sudo e recarrega a página
+- Botão **Reiniciar Servidor** (vermelho): executa `reboot` via sudo
+- Botão Sair
+
+#### 🔧 Módulo de Instalação do Monitor
+- **Novo script**: `lib/post-install/setup-monitor.sh`
+- Instala dependências Python (`flask`, `python-pam`)
+- Cria e habilita serviço systemd `monitor-servidor.service`
+- Configura sudoers para `dmidecode` sem senha
+
+### 🔒 Segurança
+- Rate limiting de login: 5 tentativas / 5 minutos por IP
+- Validação de entradas com regex whitelist (nomes de serviços, containers, ações)
+- Ações destrutivas exigem senha sudo (verificada via `sudo -S -v`, nunca armazenada)
+- `SESSION_COOKIE_HTTPONLY=True`, `SESSION_COOKIE_SAMESITE=Lax`
+- Scripts executados via `subprocess.run` com lista de argumentos (sem shell injection)
+- Proteção contra path traversal em caminhos de containers
+
+### 📊 Estatísticas Atualizadas
+
+- **Scripts principais**: 3
+- **Módulos post-install**: 9 (incluindo setup-monitor)
+- **Bibliotecas**: 7
+- **Scripts de coleta de métricas**: 6 (monitor/scripts/)
+- **Testes**: 107 automatizados
+- **Linhas de código**: ~6.300+
+- **Commits**: 34 até esta release
+
+### 🔗 Links
+
+- [Repositório GitHub](https://github.com/rattones/automacoes)
+- [PR #1 — Monitor Web](https://github.com/rattones/automacoes/pull/1)
+- [Documentação Completa](README.md)
+
+---
+
 ## [1.1.0] - 2026-01-28
 
 ### ✨ Novas Funcionalidades
