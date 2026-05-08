@@ -351,7 +351,7 @@
 </div>
 
 <script>
-  window._MONITOR = {{ {'autenticado': autenticado, 'usuario': usuario if autenticado else none} | tojson }};
+  window._MONITOR = {{ {'autenticado': autenticado, 'usuario': usuario if autenticado else none} | tojson | safe }};
 </script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
