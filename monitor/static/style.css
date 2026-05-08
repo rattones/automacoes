@@ -81,6 +81,12 @@ html, body {
 .btn-ghost    { background: transparent; border-color: transparent; color: var(--text-muted); }
 .btn-ghost:hover { background: var(--bg-card2); color: var(--text); border-color: var(--border); }
 
+.btn-ghost-warn  { background: transparent; border-color: transparent; color: var(--amarelo); }
+.btn-ghost-warn:hover  { background: var(--amarelo-dim); border-color: var(--amarelo); color: var(--amarelo); }
+
+.btn-ghost-danger { background: transparent; border-color: transparent; color: var(--vermelho); }
+.btn-ghost-danger:hover { background: var(--vermelho-dim); border-color: var(--vermelho); color: var(--vermelho); }
+
 .btn-sm  { padding: 4px 10px; font-size: 12px; }
 .btn-xs  { padding: 2px 7px;  font-size: 11px; }
 .btn-full { width: 100%; justify-content: center; }

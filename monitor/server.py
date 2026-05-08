@@ -215,6 +215,65 @@ def logout():
     return jsonify({"success": True})
 
 
+@app.route("/api/system/restart-monitor", methods=["POST"])
+@login_required
+def api_restart_monitor():
+    dados = request.get_json(silent=True) or {}
+    sudo_pass = dados.get("sudo_pass", "")
+    if not sudo_pass:
+        return jsonify({"success": False, "erro": "Senha sudo é obrigatória."}), 400
+
+    # Verificar senha antes de agendar o restart
+    r = subprocess.run(
+        ["sudo", "-S", "-v"],
+        input=sudo_pass + "\n",
+        capture_output=True, text=True, timeout=5,
+        env={**os.environ, "TERM": "dumb"}
+    )
+    if r.returncode != 0:
+        return jsonify({"success": False, "erro": "Senha sudo incorreta."}), 400
+
+    logger.info(f"Reinicialização do serviço monitor solicitada por {session.get('usuario')}")
+    # Popen com start_new_session para sobreviver ao SIGTERM do restart
+    proc = subprocess.Popen(
+        ["sudo", "-S", "systemctl", "restart", "monitor-servidor.service"],
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        start_new_session=True
+    )
+    proc.stdin.write((sudo_pass + "\n").encode())
+    proc.stdin.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/system/reboot", methods=["POST"])
+@login_required
+def api_reboot():
+    dados = request.get_json(silent=True) or {}
+    sudo_pass = dados.get("sudo_pass", "")
+    if not sudo_pass:
+        return jsonify({"success": False, "erro": "Senha sudo é obrigatória."}), 400
+
+    # Verificar senha
+    r = subprocess.run(
+        ["sudo", "-S", "-v"],
+        input=sudo_pass + "\n",
+        capture_output=True, text=True, timeout=5,
+        env={**os.environ, "TERM": "dumb"}
+    )
+    if r.returncode != 0:
+        return jsonify({"success": False, "erro": "Senha sudo incorreta."}), 400
+
+    logger.warning(f"Reinicialização do SERVIDOR solicitada por {session.get('usuario')}")
+    proc = subprocess.Popen(
+        ["sudo", "-S", "reboot"],
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        start_new_session=True
+    )
+    proc.stdin.write((sudo_pass + "\n").encode())
+    proc.stdin.close()
+    return jsonify({"success": True})
+
+
 @app.route("/api/status")
 @login_required
 def api_status():
