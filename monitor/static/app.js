@@ -265,23 +265,40 @@ async function carregarStatus() {
     }).join('');
   }
 
-  // GPU
-  const gpu = dados.gpu;
-  if (gpu) {
-    setGauge('gauge-gpu-fill', gpu.uso);
-    $('#gpu-uso').textContent = `${gpu.uso ?? '--'}%`;
-    $('#gpu-nome').textContent = gpu.nome ?? '';
-    $('#gpu-tipo').textContent = gpu.tipo?.toUpperCase() ?? '';
-    $('#gpu-mem').textContent = gpu.mem_usado_mb != null
-      ? `Usada: ${gpu.mem_usado_mb} / ${gpu.mem_total_mb} MB` : '';
-    $('#gpu-mem-livre').textContent = gpu.mem_livre_mb != null ? `Livre: ${gpu.mem_livre_mb} MB` : '';
-    $('#gpu-temp').textContent = gpu.temperatura != null ? `${gpu.temperatura}°C` : '';
-    $('#gpu-driver').textContent = gpu.driver_version ? `Driver: ${gpu.driver_version}` : '';
-    $('#card-gpu').classList.remove('hidden');
-  } else {
-    setGauge('gauge-gpu-fill', 0);
-    $('#gpu-uso').textContent = 'N/A';
-    $('#gpu-nome').textContent = 'Não detectada';
+  // GPUs
+  const gpus = dados.gpus ?? [];
+  const gpuList = $('#gpu-list');
+  if (gpuList) {
+    if (gpus.length === 0) {
+      gpuList.innerHTML = '<span class="dimm-unavail">Nenhuma GPU detectada</span>';
+    } else {
+      gpuList.innerHTML = gpus.map(g => {
+        const nivel    = (g.uso ?? 0) >= 90 ? 'nivel-critico' : (g.uso ?? 0) >= 70 ? 'nivel-aviso' : '';
+        const usoStyle = (g.uso ?? 0) >= 90 ? 'color:var(--vermelho)' : (g.uso ?? 0) >= 70 ? 'color:var(--amarelo)' : '';
+        const usoStr   = g.uso != null ? `${g.uso}%` : '—';
+        const usoW     = g.uso != null ? Number(g.uso).toFixed(1) : '0';
+        const tempStr  = g.temperatura != null ? `${g.temperatura}°C` : '';
+        const tipo     = (g.tipo ?? 'unknown').toLowerCase();
+        const chips = [];
+        if (g.mem_usado_mb != null) chips.push(`${g.mem_usado_mb} / ${g.mem_total_mb} MB`);
+        if (g.driver_version)       chips.push(`Driver ${esc(g.driver_version)}`);
+        const chipsHtml = chips.length
+          ? `<div class="gpu-item-chips">${chips.map(c => `<span class="gpu-item-chip">${c}</span>`).join('')}</div>`
+          : '';
+        return `<div class="gpu-item">
+          <div class="gpu-item-header">
+            <span class="gpu-item-nome" title="${esc(g.nome ?? '')}">${esc(g.nome ?? 'GPU')}</span>
+            <span class="gpu-badge gpu-badge-${tipo}">${tipo.toUpperCase()}</span>
+          </div>
+          <div class="gpu-item-uso-row">
+            <span class="gpu-item-pct" style="${usoStyle}">${usoStr}</span>
+            <div class="gpu-bar-wrap"><div class="gpu-bar ${nivel}" style="width:${usoW}%"></div></div>
+            <span class="gpu-item-temp">${tempStr}</span>
+          </div>
+          ${chipsHtml}
+        </div>`;
+      }).join('');
+    }
   }
 
   // Memória

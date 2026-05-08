@@ -223,7 +223,7 @@ html, body {
 /* ── Grid de Métricas ──────────────────────────────────── */
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
 }
@@ -287,6 +287,38 @@ html, body {
   background: var(--bg-card2); border: 1px solid var(--border-subtle);
   border-radius: 4px; padding: 2px 8px; font-size: 11px; color: var(--text-muted);
 }
+
+/* ── GPUs ──────────────────────────────────────────────── */
+.gpu-list { width: 100%; display: flex; flex-direction: column; gap: .4rem; margin-top: .1rem; }
+
+.gpu-item {
+  background: var(--bg-card2); border: 1px solid var(--border-subtle);
+  border-radius: 6px; padding: .4rem .6rem;
+}
+
+.gpu-item-header {
+  display: flex; justify-content: space-between; align-items: center; gap: .4rem;
+  margin-bottom: .3rem;
+}
+
+.gpu-item-nome { font-size: 11px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.gpu-badge { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
+.gpu-badge-nvidia  { background: #1a3a1a; color: #76b900; }
+.gpu-badge-amd     { background: var(--vermelho-dim); color: var(--vermelho); }
+.gpu-badge-intel   { background: var(--azul-dim); color: var(--azul); }
+.gpu-badge-unknown { background: var(--bg-card2); color: var(--text-muted); }
+
+.gpu-item-uso-row { display: flex; align-items: center; gap: .4rem; margin-bottom: .2rem; }
+.gpu-item-pct  { font-size: 12px; font-weight: 700; color: var(--text); min-width: 32px; text-align: right; }
+.gpu-bar-wrap  { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.gpu-bar { height: 100%; border-radius: 2px; background: var(--azul); transition: width .5s ease; }
+.gpu-bar.nivel-aviso   { background: var(--amarelo); }
+.gpu-bar.nivel-critico { background: var(--vermelho); }
+.gpu-item-temp { font-size: 10px; color: var(--text-muted); min-width: 38px; text-align: right; white-space: nowrap; }
+
+.gpu-item-chips { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .15rem; }
+.gpu-item-chip  { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px 6px; font-size: 10px; color: var(--text-muted); }
 
 /* ── CPU Cores ─────────────────────────────────────────── */
 .cpu-cores-grid {

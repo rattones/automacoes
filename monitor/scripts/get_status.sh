@@ -77,67 +77,168 @@ for zone in /sys/class/thermal/thermal_zone*/temp; do
     fi
 done
 
-# ── GPU ───────────────────────────────────────────────────────────────────────
-gpu_info="null"
+# ── GPUs (multi-GPU via lshw + sysfs/nvidia-smi) ────────────────────────────
+gpus_data=$(python3 - <<'PYEOF'
+import subprocess, json, re, os, glob
 
-if command -v nvidia-smi &>/dev/null; then
-    # NVIDIA
-    raw=$(nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,memory.free,temperature.gpu,driver_version \
-        --format=csv,noheader,nounits 2>/dev/null | head -1 || echo "")
-    if [ -n "$raw" ]; then
-        gpu_name=$(echo "$raw" | cut -d, -f1 | xargs)
-        gpu_uso_pct=$(echo "$raw" | cut -d, -f2 | xargs)
-        gpu_mem_usado=$(echo "$raw" | cut -d, -f3 | xargs)
-        gpu_mem_total=$(echo "$raw" | cut -d, -f4 | xargs)
-        gpu_mem_livre=$(echo "$raw" | cut -d, -f5 | xargs)
-        gpu_temp=$(echo "$raw" | cut -d, -f6 | xargs)
-        gpu_driver=$(echo "$raw" | cut -d, -f7 | xargs)
-        gpu_info="{\"tipo\":\"nvidia\",\"nome\":\"${gpu_name}\",\"uso\":${gpu_uso_pct},\"mem_usado_mb\":${gpu_mem_usado},\"mem_total_mb\":${gpu_mem_total},\"mem_livre_mb\":${gpu_mem_livre},\"temperatura\":${gpu_temp},\"driver_version\":\"${gpu_driver}\"}"
-    fi
-elif command -v rocm-smi &>/dev/null; then
-    # AMD via ROCm
-    gpu_uso_pct=$(rocm-smi --showuse 2>/dev/null | grep -oP '\d+(?=%)' | head -1 || echo 0)
-    gpu_temp=$(rocm-smi --showtemp 2>/dev/null | grep -oP '\d+\.\d+' | head -1 || echo 0)
-    gpu_name=$(rocm-smi --showproductname 2>/dev/null | awk '/Card series/ {print $NF}' | head -1 || echo "AMD GPU")
-    gpu_driver=$(rocm-smi --showdriverversion 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "")
-    gpu_driver_json=$([ -n "$gpu_driver" ] && echo "\"${gpu_driver}\"" || echo "null")
-    gpu_info="{\"tipo\":\"amd\",\"nome\":\"${gpu_name}\",\"uso\":${gpu_uso_pct},\"temperatura\":${gpu_temp},\"driver_version\":${gpu_driver_json}}"
-elif [ -f /sys/class/drm/card0/device/gpu_busy_percent ]; then
-    # AMD via sysfs (sem ROCm)
-    gpu_uso_pct=$(cat /sys/class/drm/card0/device/gpu_busy_percent 2>/dev/null || echo 0)
-    gpu_name="AMD GPU"
-    gpu_mem_usado_b=$(cat /sys/class/drm/card0/device/mem_info_vram_used 2>/dev/null || echo "")
-    gpu_mem_total_b=$(cat /sys/class/drm/card0/device/mem_info_vram_total 2>/dev/null || echo "")
-    gpu_mem_usado_mb="null"; gpu_mem_total_mb="null"; gpu_mem_livre_mb="null"
-    if [ -n "$gpu_mem_total_b" ] && [ "${gpu_mem_total_b:-0}" -gt 0 ] 2>/dev/null; then
-        gpu_mem_total_mb=$(( gpu_mem_total_b / 1048576 ))
-        gpu_mem_usado_mb=$(( ${gpu_mem_usado_b:-0} / 1048576 ))
-        gpu_mem_livre_mb=$(( gpu_mem_total_mb - gpu_mem_usado_mb ))
-    fi
-    gpu_driver_file="/sys/class/drm/card0/device/driver/module/version"
-    gpu_driver_json="null"
-    [ -f "$gpu_driver_file" ] && gpu_driver_json="\"$(cat "$gpu_driver_file" 2>/dev/null | xargs)\""
-    gpu_info="{\"tipo\":\"amd_sysfs\",\"nome\":\"${gpu_name}\",\"uso\":${gpu_uso_pct},\"mem_usado_mb\":${gpu_mem_usado_mb},\"mem_total_mb\":${gpu_mem_total_mb},\"mem_livre_mb\":${gpu_mem_livre_mb},\"driver_version\":${gpu_driver_json}}"
-elif command -v intel_gpu_top &>/dev/null; then
-    # Intel
-    raw=$(timeout 1 intel_gpu_top -J -s 500 2>/dev/null | python3 -c "
-import sys,json
-for line in sys.stdin:
+def run(*cmd):
     try:
-        d=json.loads(line.strip().rstrip(','))
-        if 'engines' in d:
-            # soma todos os engines
-            total=sum(e.get('busy',0) for e in d['engines'].values() if isinstance(e,dict))
-            count=len([e for e in d['engines'].values() if isinstance(e,dict)])
-            print(round(total/count,1) if count else 0)
-            break
-    except: pass
-" 2>/dev/null || echo 0)
-    gpu_driver_file="/sys/class/drm/card0/device/driver/module/version"
-    gpu_driver_json="null"
-    [ -f "$gpu_driver_file" ] && gpu_driver_json="\"$(cat "$gpu_driver_file" 2>/dev/null | xargs)\""
-    gpu_info="{\"tipo\":\"intel\",\"nome\":\"Intel GPU\",\"uso\":${raw},\"driver_version\":${gpu_driver_json}}"
-fi
+        r = subprocess.run(list(cmd), capture_output=True, text=True, timeout=10)
+        return r.stdout if r.returncode == 0 else ''
+    except Exception:
+        return ''
+
+# ── Descoberta via lshw (suporta PT-BR e EN) ─────────────────────────────────
+lshw_out = run('sudo', '-n', 'lshw', '-C', 'video')
+
+def parse_lshw(text):
+    gpus = []
+    for bloco in re.split(r'\*-display', text):
+        if not bloco.strip():
+            continue
+        def field(*labels):
+            for lbl in labels:
+                m = re.search(rf'^\s*{lbl}\s*:\s*(.+)$', bloco, re.MULTILINE | re.IGNORECASE)
+                if m:
+                    return m.group(1).strip()
+            return ''
+        produto = field('product', 'produto')
+        if not produto:
+            continue
+        fabricante = field('vendor', 'fabricante')
+        pci_m = re.search(r'pci@([\w:.]+)', bloco, re.IGNORECASE)
+        pci   = pci_m.group(1) if pci_m else ''
+        drv_m = re.search(r'driver=(\S+)', bloco, re.IGNORECASE)
+        driver = drv_m.group(1) if drv_m else ''
+        gpus.append({
+            'nome': produto, 'fabricante': fabricante, 'driver': driver, 'pci': pci,
+            'tipo': None, 'uso': None,
+            'mem_usado_mb': None, 'mem_total_mb': None, 'mem_livre_mb': None,
+            'temperatura': None, 'driver_version': None,
+        })
+    return gpus
+
+gpus = parse_lshw(lshw_out)
+
+# Fallback: lspci -vmm + lspci -k
+if not gpus:
+    current = {}
+    for line in run('lspci', '-vmm').splitlines():
+        if not line.strip():
+            cls = current.get('Class', '')
+            if any(k in cls for k in ('VGA', 'Display', '3D')):
+                slot = current.get('Slot', '')
+                drv_out = run('lspci', '-k', '-s', slot)
+                drv_m = re.search(r'Kernel driver in use:\s*(\S+)', drv_out)
+                gpus.append({
+                    'nome': current.get('SDevice') or current.get('Device', 'GPU'),
+                    'fabricante': current.get('SVendor') or current.get('Vendor', ''),
+                    'driver': drv_m.group(1) if drv_m else '',
+                    'pci': slot,
+                    'tipo': None, 'uso': None,
+                    'mem_usado_mb': None, 'mem_total_mb': None, 'mem_livre_mb': None,
+                    'temperatura': None, 'driver_version': None,
+                })
+            current = {}
+        else:
+            k, _, v = line.partition(':')
+            current[k.strip()] = v.strip()
+
+# ── NVIDIA (driver=nvidia) via nvidia-smi ─────────────────────────────────────
+def enrich_nvidia(gpu_list):
+    smi = run('nvidia-smi',
+              '--query-gpu=pci.bus_id,utilization.gpu,memory.used,memory.total,memory.free,temperature.gpu,driver_version',
+              '--format=csv,noheader,nounits')
+    if not smi:
+        return
+    for line in smi.strip().splitlines():
+        parts = [x.strip() for x in line.split(',')]
+        if len(parts) < 7:
+            continue
+        pci_smi = parts[0].lower().split(':',1)[-1]  # "00000000:01:00.0" → "01:00.0"
+        for g in gpu_list:
+            if g['driver'] != 'nvidia':
+                continue
+            gpci = g['pci'].lower().replace('0000:', '')
+            if gpci and (gpci == pci_smi or pci_smi.endswith(gpci)):
+                g['tipo'] = 'nvidia'
+                try: g['uso'] = float(parts[1])
+                except: pass
+                try: g['mem_usado_mb'] = int(parts[2])
+                except: pass
+                try: g['mem_total_mb'] = int(parts[3])
+                except: pass
+                try: g['mem_livre_mb'] = int(parts[4])
+                except: pass
+                try: g['temperatura'] = float(parts[5])
+                except: pass
+                g['driver_version'] = parts[6]
+
+# ── AMD (driver=amdgpu) via sysfs ─────────────────────────────────────────────
+def enrich_drm_sysfs(g, driver_tipo):
+    drm_dev = None
+    if g['pci']:
+        pci_short = g['pci'].lower().replace('0000:', '')
+        for lp in glob.glob('/sys/class/drm/card*/device'):
+            real = os.path.realpath(lp)
+            if pci_short in real or g['pci'].lower() in real:
+                drm_dev = lp
+                break
+    if not drm_dev:
+        candidates = sorted(glob.glob('/sys/class/drm/card*/device/gpu_busy_percent'))
+        if candidates:
+            drm_dev = os.path.dirname(candidates[0])
+    if not drm_dev:
+        return
+    def _r(p):
+        try: return open(p).read().strip()
+        except: return None
+    g['tipo'] = driver_tipo
+    busy = _r(f'{drm_dev}/gpu_busy_percent')
+    if busy is not None:
+        try: g['uso'] = float(busy)
+        except: pass
+    vt = _r(f'{drm_dev}/mem_info_vram_total')
+    vu = _r(f'{drm_dev}/mem_info_vram_used')
+    if vt and int(vt) > 0:
+        g['mem_total_mb'] = int(vt) // 1048576
+        g['mem_usado_mb'] = int(vu or 0) // 1048576
+        g['mem_livre_mb'] = g['mem_total_mb'] - g['mem_usado_mb']
+    for tf in sorted(glob.glob(f'{drm_dev}/hwmon/hwmon*/temp*_input')):
+        try:
+            val = int(open(tf).read().strip())
+            if 20000 < val < 120000:
+                g['temperatura'] = val // 1000
+                break
+        except: pass
+    ver = _r(f'{drm_dev}/driver/module/version')
+    if ver:
+        g['driver_version'] = ver
+
+enrich_nvidia(gpus)
+for g in gpus:
+    if g['driver'] == 'amdgpu':
+        enrich_drm_sysfs(g, 'amd')
+    elif g['driver'] == 'nouveau':
+        enrich_drm_sysfs(g, 'nvidia')  # é NVIDIA mas com driver open-source
+
+# Inferir tipo para GPUs sem métricas
+for g in gpus:
+    if not g['tipo']:
+        fab = g['fabricante'].lower()
+        drv = g['driver'].lower()
+        if 'nvidia' in fab or drv in ('nvidia', 'nouveau'):
+            g['tipo'] = 'nvidia'
+        elif 'amd' in fab or 'ati' in fab or drv in ('amdgpu', 'radeon'):
+            g['tipo'] = 'amd'
+        elif 'intel' in fab or drv in ('i915', 'xe'):
+            g['tipo'] = 'intel'
+        else:
+            g['tipo'] = 'unknown'
+
+print(json.dumps(gpus))
+PYEOF
+)
 
 # ── MEMÓRIA ───────────────────────────────────────────────────────────────────
 mem_total=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
@@ -289,7 +390,7 @@ cat <<EOF
     "temperatura": ${cpu_temp},
     "cores": ${cpu_cores_data}
   },
-  "gpu": ${gpu_info},
+  "gpus": ${gpus_data},
   "memoria": {
     "total": ${mem_total_b},
     "usado": ${mem_usado_b},

@@ -153,24 +153,10 @@
         <div class="metric-card" id="card-gpu">
           <div class="metric-header">
             <span class="metric-label">GPU</span>
-            <span id="gpu-nome" class="metric-sub"></span>
           </div>
-          <div class="gauge-wrap">
-            <svg class="gauge" viewBox="0 0 120 120">
-              <circle class="gauge-track" cx="60" cy="60" r="50"/>
-              <circle class="gauge-fill" id="gauge-gpu-fill" cx="60" cy="60" r="50"
-                      stroke-dasharray="0 314"/>
-            </svg>
-            <div class="gauge-center">
-              <span id="gpu-uso" class="gauge-value">--%</span>
-              <span id="gpu-tipo" class="gauge-sub"></span>
-            </div>
-          </div>
-          <div class="metric-footer">
-            <span id="gpu-mem" class="metric-chip"></span>
-            <span id="gpu-mem-livre" class="metric-chip"></span>
-            <span id="gpu-temp" class="metric-chip"></span>
-            <span id="gpu-driver" class="metric-chip"></span>
+          <div id="gpu-list" class="gpu-list">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
           </div>
         </div>
 
