@@ -161,7 +161,8 @@ dimms_data=$(python3 - <<'PYEOF'
 import subprocess, json, re, glob
 
 def run_dmi():
-    for cmd in [['dmidecode', '-t', 'memory'], ['sudo', '-n', 'dmidecode', '-t', 'memory']]:
+    for cmd in [['sudo', '-n', 'dmidecode', '--type', '17'],
+                ['dmidecode', '--type', '17']]:
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if r.returncode == 0 and 'Memory Device' in r.stdout:
@@ -172,6 +173,8 @@ def run_dmi():
 
 raw = run_dmi()
 dimms = []
+
+RUIDO_FAB = {'Unknown', 'Not Specified', '', '0000', 'NO DIMM', 'Undefined'}
 
 for bloco in raw.split('\nMemory Device\n'):
     if 'Size:' not in bloco:
@@ -194,13 +197,18 @@ for bloco in raw.split('\nMemory Device\n'):
         m = re.search(r'(\d+)', s)
         return int(m.group(1)) if m else None
 
-    fab = campo('Manufacturer')
+    fab    = campo('Manufacturer')
     modelo = campo('Part Number')
     locator = campo('Locator')
+    tipo   = campo('Type')  # DDR3, DDR4, LPDDR4...
 
-    for ruido in ('Unknown', 'Not Specified', ''):
-        if fab == ruido: fab = ''
-        if modelo == ruido: modelo = ''
+    # Normalizar ruído
+    if fab in RUIDO_FAB or re.fullmatch(r'[0-9A-Fa-f]+', fab):
+        fab = ''
+    if modelo in {'Unknown', 'Not Specified', ''}:
+        modelo = ''
+    if tipo in {'Unknown', ''}:
+        tipo = None
 
     # Temperatura via hwmon (labels DIMM* ou DDR*)
     temp = None
@@ -216,6 +224,7 @@ for bloco in raw.split('\nMemory Device\n'):
 
     dimms.append({
         'locator': locator,
+        'tipo': tipo,
         'tamanho_mb': tamanho_mb,
         'velocidade_mts': parse_mts(campo('Speed')),
         'velocidade_config_mts': parse_mts(campo('Configured Memory Speed')),

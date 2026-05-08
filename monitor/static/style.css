@@ -341,7 +341,8 @@ html, body {
   align-items: center; gap: .5rem;
 }
 
-.dimm-slot  { color: var(--text-muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dimm-slot  { color: var(--text-muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: .3rem; }
+.dimm-tipo  { background: var(--azul-dim); color: var(--azul); font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
 .dimm-size  { font-weight: 700; color: var(--text); white-space: nowrap; }
 .dimm-speed { color: var(--azul); font-size: 10px; white-space: nowrap; }
 .dimm-temp  { color: var(--text-muted); font-size: 10px; white-space: nowrap; }

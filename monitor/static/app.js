@@ -304,11 +304,12 @@ async function carregarStatus() {
         const gb = d.tamanho_mb != null ? (d.tamanho_mb / 1024).toFixed(0) + ' GB' : '?';
         const freq = d.velocidade_config_mts ?? d.velocidade_mts;
         const freqStr = freq ? `${freq} MT/s` : '';
-        const fabModelo = [d.fabricante, d.modelo].filter(Boolean).join(' ').trim();
+        const fabModelo = [d.fabricante, d.modelo].filter(Boolean).join(' · ').trim();
         const tempStr = d.temperatura != null ? `${d.temperatura}°C` : '';
+        const tipoStr = d.tipo ? `<span class="dimm-tipo">${esc(d.tipo)}</span>` : '';
         return `<div class="dimm-item">
           <div class="dimm-row">
-            <span class="dimm-slot">${esc(d.locator)}</span>
+            <span class="dimm-slot">${esc(d.locator)}${tipoStr}</span>
             <span class="dimm-size">${gb}</span>
             <span class="dimm-speed">${freqStr}</span>
             <span class="dimm-temp">${tempStr}</span>
