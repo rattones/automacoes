@@ -303,9 +303,11 @@ async function carregarStatus() {
 
 // ── Rede ──────────────────────────────────────────────────────────────────────
 
-async function carregarRede() {
-  $('#tbody-interfaces').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
-  $('#tbody-portas').innerHTML     = '<tr><td colspan="5" class="loading-row">Carregando...</td></tr>';
+async function carregarRede(silencioso = false) {
+  if (!silencioso) {
+    $('#tbody-interfaces').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-portas').innerHTML     = '<tr><td colspan="5" class="loading-row">Carregando...</td></tr>';
+  }
 
   const dados = await api('/api/network');
   if (!dados) return;
@@ -643,7 +645,7 @@ function iniciarMonitoramento() {
 
   // Demais tabs: refresh silencioso a cada 15s (sem limpar a tabela)
   estado.timers.tabs = setInterval(() => {
-    if (estado.tabAtiva === 'rede')       carregarRede();
+    if (estado.tabAtiva === 'rede')       carregarRede(true);
     if (estado.tabAtiva === 'servicos')   carregarServicos(true);
     if (estado.tabAtiva === 'containers') carregarContainers(true);
   }, 15000);
