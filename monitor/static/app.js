@@ -246,6 +246,22 @@ async function carregarStatus() {
   $('#cpu-load').textContent = dados.sistema?.load_1m != null
     ? `Load: ${dados.sistema.load_1m}` : '';
 
+  // Núcleos individuais
+  const coresList = $('#cpu-cores-list');
+  if (coresList) {
+    const cores = cpu.cores ?? [];
+    coresList.innerHTML = cores.map(c => {
+      const nivelClass = c.uso >= 90 ? 'nivel-critico' : c.uso >= 70 ? 'nivel-aviso' : '';
+      const tempStr = c.temp != null ? `${c.temp}°C` : '';
+      return `<div class="core-item">
+        <span class="core-label">C${c.id}</span>
+        <div class="core-bar-wrap"><div class="core-bar ${nivelClass}" style="width:${c.uso.toFixed(1)}%"></div></div>
+        <span class="core-uso">${c.uso}%</span>
+        <span class="core-temp">${tempStr}</span>
+      </div>`;
+    }).join('');
+  }
+
   // GPU
   const gpu = dados.gpu;
   if (gpu) {
@@ -254,8 +270,10 @@ async function carregarStatus() {
     $('#gpu-nome').textContent = gpu.nome ?? '';
     $('#gpu-tipo').textContent = gpu.tipo?.toUpperCase() ?? '';
     $('#gpu-mem').textContent = gpu.mem_usado_mb != null
-      ? `${gpu.mem_usado_mb}/${gpu.mem_total_mb} MB` : '';
+      ? `Usada: ${gpu.mem_usado_mb} / ${gpu.mem_total_mb} MB` : '';
+    $('#gpu-mem-livre').textContent = gpu.mem_livre_mb != null ? `Livre: ${gpu.mem_livre_mb} MB` : '';
     $('#gpu-temp').textContent = gpu.temperatura != null ? `${gpu.temperatura}°C` : '';
+    $('#gpu-driver').textContent = gpu.driver_version ? `Driver: ${gpu.driver_version}` : '';
     $('#card-gpu').classList.remove('hidden');
   } else {
     setGauge('gauge-gpu-fill', 0);
@@ -271,6 +289,32 @@ async function carregarStatus() {
   $('#mem-total-chip').textContent = `Total: ${formatBytes(mem.total)}`;
   $('#mem-swap-chip').textContent  = mem.swap_total
     ? `Swap: ${mem.swap_uso_pct}% (${formatBytes(mem.swap_total)})` : 'Sem swap';
+
+  // DIMMs
+  const dimmsList = $('#mem-dimms-list');
+  if (dimmsList) {
+    const dimms = mem.dimms ?? [];
+    if (dimms.length === 0) {
+      dimmsList.innerHTML = '<span class="dimm-unavail">dmidecode indisponível</span>';
+    } else {
+      dimmsList.innerHTML = dimms.map(d => {
+        const gb = d.tamanho_mb != null ? (d.tamanho_mb / 1024).toFixed(0) + ' GB' : '?';
+        const freq = d.velocidade_config_mts ?? d.velocidade_mts;
+        const freqStr = freq ? `${freq} MT/s` : '';
+        const fabModelo = [d.fabricante, d.modelo].filter(Boolean).join(' ').trim();
+        const tempStr = d.temperatura != null ? `${d.temperatura}°C` : '';
+        return `<div class="dimm-item">
+          <div class="dimm-row">
+            <span class="dimm-slot">${esc(d.locator)}</span>
+            <span class="dimm-size">${gb}</span>
+            <span class="dimm-speed">${freqStr}</span>
+            <span class="dimm-temp">${tempStr}</span>
+          </div>
+          ${fabModelo ? `<div class="dimm-model">${esc(fabModelo)}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+  }
 
   // Disco
   const discos = dados.disco ?? [];
