@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor do Servidor</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="icon" type="image/x-icon"  href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="dark">
+
+<!-- ══════════════════════════════════════════════════════════
+     TELA DE LOGIN
+═══════════════════════════════════════════════════════════ -->
+<div id="login-overlay" class="{{ 'hidden' if autenticado else '' }}">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <path d="M8 21h8M12 17v4"/>
+      </svg>
+    </div>
+    <h1>Monitor do Servidor</h1>
+    <p class="login-subtitle">Entre com seu usuário e senha do sistema</p>
+
+    <form id="login-form" autocomplete="off" novalidate>
+      <div class="field">
+        <label for="l-usuario">Usuário</label>
+        <input id="l-usuario" name="usuario" type="text" autocomplete="username"
+               placeholder="usuário do sistema" required />
+      </div>
+      <div class="field">
+        <label for="l-senha">Senha</label>
+        <input id="l-senha" name="senha" type="password" autocomplete="current-password"
+               placeholder="••••••••" required />
+      </div>
+      <div id="login-erro" class="login-erro hidden"></div>
+      <button type="submit" id="btn-login" class="btn btn-primary btn-full">
+        <span class="btn-label">Entrar</span>
+        <span class="btn-spinner hidden"></span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL SUDO
+═══════════════════════════════════════════════════════════ -->
+<div id="sudo-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--amarelo)" stroke-width="2">
+        <path d="M12 9v4M12 17h.01"/>
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      </svg>
+      <h3>Autenticação necessária</h3>
+    </div>
+    <p id="sudo-descricao">Esta ação requer privilégios de administrador.</p>
+    <div class="field">
+      <label for="sudo-senha">Senha sudo</label>
+      <input id="sudo-senha" type="password" autocomplete="off" placeholder="Sua senha sudo" />
+    </div>
+    <div id="sudo-erro" class="login-erro hidden"></div>
+    <div class="modal-actions">
+      <button id="sudo-cancelar" class="btn btn-ghost">Cancelar</button>
+      <button id="sudo-confirmar" class="btn btn-danger">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     NOTIFICAÇÕES TOAST
+═══════════════════════════════════════════════════════════ -->
+<div id="toast-container" aria-live="polite"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PAINEL PRINCIPAL
+═══════════════════════════════════════════════════════════ -->
+<div id="app" class="{{ '' if autenticado else 'hidden' }}">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="header-left">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--azul)" stroke-width="2">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <path d="M8 21h8M12 17v4"/>
+      </svg>
+      <span class="header-title">Monitor do Servidor</span>
+      <span id="header-hostname" class="header-hostname"></span>
+    </div>
+    <div class="header-right">
+      <span class="header-user">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        <span id="header-usuario">{{ usuario if autenticado else '' }}</span>
+      </span>
+      <span id="header-uptime" class="header-uptime"></span>
+      <button id="btn-refresh" class="btn btn-ghost btn-sm" title="Atualizar agora">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+      </button>
+      <button id="btn-restart-monitor" class="btn btn-ghost-warn btn-sm" title="Reiniciar serviço de monitoramento">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>Monitor
+      </button>
+      <button id="btn-reboot" class="btn btn-ghost-danger btn-sm" title="Reiniciar o servidor inteiro">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+          <line x1="12" y1="2" x2="12" y2="12"/>
+        </svg>Servidor
+      </button>
+      <button id="btn-logout" class="btn btn-ghost btn-sm">Sair</button>
+    </div>
+  </header>
+
+  <!-- ── Navegação ── -->
+  <nav class="nav-tabs">
+    <button class="tab active" data-tab="metricas">Métricas</button>
+    <button class="tab" data-tab="rede">Rede</button>
+    <button class="tab" data-tab="servicos">Serviços</button>
+    <button class="tab" data-tab="containers">Containers</button>
+  </nav>
+
+  <main class="main-content">
+
+    <!-- ══ SEÇÃO: MÉTRICAS ══ -->
+    <section id="tab-metricas" class="tab-content active">
+
+      <!-- Cards de gauges -->
+      <div class="metrics-grid">
+
+        <!-- CPU -->
+        <div class="metric-card" id="card-cpu">
+          <div class="metric-header">
+            <span class="metric-label">CPU</span>
+            <span id="cpu-modelo" class="metric-sub"></span>
+          </div>
+          <div class="gauge-wrap">
+            <svg class="gauge" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="50"/>
+              <circle class="gauge-fill" id="gauge-cpu-fill" cx="60" cy="60" r="50"
+                      stroke-dasharray="0 314"/>
+            </svg>
+            <div class="gauge-center">
+              <span id="cpu-uso" class="gauge-value">--%</span>
+              <span id="cpu-nucleos" class="gauge-sub"></span>
+            </div>
+          </div>
+          <div class="metric-footer">
+            <span id="cpu-freq" class="metric-chip"></span>
+            <span id="cpu-temp" class="metric-chip"></span>
+            <span id="cpu-load" class="metric-chip"></span>
+          </div>
+          <div id="cpu-cores-list" class="cpu-cores-grid"></div>
+        </div>
+
+        <!-- GPU -->
+        <div class="metric-card" id="card-gpu">
+          <div class="metric-header">
+            <span class="metric-label">GPU</span>
+          </div>
+          <div id="gpu-list" class="gpu-list">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>
+
+        <!-- Memória RAM -->
+        <div class="metric-card" id="card-mem">
+          <div class="metric-header">
+            <span class="metric-label">Memória RAM</span>
+          </div>
+          <div class="gauge-wrap">
+            <svg class="gauge" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="50"/>
+              <circle class="gauge-fill" id="gauge-mem-fill" cx="60" cy="60" r="50"
+                      stroke-dasharray="0 314"/>
+            </svg>
+            <div class="gauge-center">
+              <span id="mem-uso-pct" class="gauge-value">--%</span>
+              <span id="mem-usado-label" class="gauge-sub"></span>
+            </div>
+          </div>
+          <div class="metric-footer">
+            <span id="mem-total-chip" class="metric-chip"></span>
+            <span id="mem-swap-chip" class="metric-chip"></span>
+          </div>
+          <div id="mem-dimms-list" class="mem-dimms-list"></div>
+        </div>
+
+        <!-- Disco -->
+        <div class="metric-card" id="card-disco">
+          <div class="metric-header">
+            <span class="metric-label">Disco</span>
+          </div>
+          <div id="disco-barras" class="disco-list">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Info do sistema -->
+      <div class="info-bar" id="info-sistema">
+        <span id="info-kernel"></span>
+        <span id="info-load"></span>
+      </div>
+
+    </section>
+
+    <!-- ══ SEÇÃO: REDE ══ -->
+    <section id="tab-rede" class="tab-content hidden">
+
+      <!-- Interfaces -->
+      <div class="section-header">
+        <h2>Interfaces de Rede</h2>
+        <button class="btn btn-ghost btn-sm" id="btn-refresh-rede">Atualizar</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="tabela-interfaces">
+          <thead>
+            <tr>
+              <th>Interface</th>
+              <th>Estado</th>
+              <th>MAC</th>
+              <th>Endereços IP</th>
+              <th>Rx (Mbps)</th>
+              <th>Tx (Mbps)</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-interfaces">
+            <tr><td colspan="6" class="loading-row">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Serviços por porta/IP -->
+      <div class="section-header" style="margin-top:2rem">
+        <h2>Serviços em Escuta</h2>
+        <div class="section-actions">
+          <input
+            type="search"
+            id="filtro-portas"
+            class="input-filtro"
+            placeholder="Filtrar por porta, processo ou serviço…"
+            autocomplete="off"
+          >
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="tabela-servicos-porta">
+          <thead>
+            <tr>
+              <th>Porta</th>
+              <th>Processo</th>
+              <th>Serviço systemd</th>
+              <th>IPs em escuta</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-portas">
+            <tr><td colspan="4" class="loading-row">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+
+    <!-- ══ SEÇÃO: SERVIÇOS SYSTEMD ══ -->
+    <section id="tab-servicos" class="tab-content hidden">
+
+      <div class="section-header">
+        <h2>Serviços do Sistema</h2>
+        <div class="section-actions">
+          <button class="btn btn-warning btn-sm" id="btn-atualizar-sistema">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Atualizar Sistema
+          </button>
+          <button class="btn btn-ghost btn-sm" id="btn-refresh-servicos">Atualizar</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="tabela-servicos">
+          <thead>
+            <tr>
+              <th>Serviço</th>
+              <th>Status</th>
+              <th>Versão</th>
+              <th>Atualização</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-servicos">
+            <tr><td colspan="5" class="loading-row">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+
+    <!-- ══ SEÇÃO: CONTAINERS ══ -->
+    <section id="tab-containers" class="tab-content hidden">
+
+      <div class="section-header">
+        <h2>Containers Docker</h2>
+        <button class="btn btn-ghost btn-sm" id="btn-refresh-containers">Atualizar</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="tabela-containers">
+          <thead>
+            <tr>
+              <th>Container</th>
+              <th>Imagem</th>
+              <th>Status</th>
+              <th>Portas</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-containers">
+            <tr><td colspan="5" class="loading-row">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Output de operações -->
+      <div id="output-container" class="output-box hidden">
+        <div class="output-header">
+          <span>Saída da operação</span>
+          <button class="btn btn-ghost btn-xs" id="btn-fechar-output">✕</button>
+        </div>
+        <pre id="output-texto"></pre>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<script>
+  window._MONITOR = {{ {'autenticado': autenticado, 'usuario': usuario if autenticado else none} | tojson | safe }};
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
