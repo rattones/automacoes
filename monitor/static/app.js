@@ -18,7 +18,7 @@ const estado = {
   timers: {},
   pendente: null,   // Ação pendente que aguarda sudo { fn, descricao }
   dadosRede: null,  // Cache para evitar recalcular rx/tx
-  _servicosPorta: [], // Cache da lista de portas para o filtro
+  _servicosPorta: [], // Cache da lista combinada (portas em escuta + watchlist) para o filtro
 };
 
 // ── Utilitários gerais ────────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ $('#btn-logout').addEventListener('click', async () => {
 $('#btn-restart-monitor').addEventListener('click', () => {
   pedirSudo('Reiniciar o serviço de monitoramento (monitor-servidor.service)', async (senha) => {
     const r = await api('/api/system/restart-monitor', {
-      method: 'POST', body: JSON.stringify({ sudo_pass: senha }),
+      method: 'POST', body: { sudo_pass: senha },
     });
     if (r?.success) {
       toast('Serviço reiniciando… recarregando em 5s', 'ok', 6000);
@@ -179,7 +179,7 @@ $('#btn-restart-monitor').addEventListener('click', () => {
 $('#btn-reboot').addEventListener('click', () => {
   pedirSudo('⚠️ Reiniciar o servidor inteiro. Isso encerrará todas as conexões.', async (senha) => {
     const r = await api('/api/system/reboot', {
-      method: 'POST', body: JSON.stringify({ sudo_pass: senha }),
+      method: 'POST', body: { sudo_pass: senha },
     });
     if (r?.success) {
       toast('Servidor reiniciando. A página ficará indisponível em breve.', 'ok', 15000);
@@ -398,10 +398,13 @@ async function carregarStatus() {
 async function carregarRede(silencioso = false) {
   if (!silencioso) {
     $('#tbody-interfaces').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
-    $('#tbody-portas').innerHTML     = '<tr><td colspan="5" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-portas').innerHTML     = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
   }
 
-  const dados = await api('/api/network');
+  const [dados, dadosWatch] = await Promise.all([
+    api('/api/network'),
+    api('/api/network/watchlist'),
+  ]);
   if (!dados) return;
   estado.dadosRede = dados;
 
@@ -447,17 +450,36 @@ async function carregarRede(silencioso = false) {
       }
     }
   }
-  const servicos = [...porMap.values()].sort((a, b) => a.porta - b.porta);
-  estado._servicosPorta = servicos;
-  renderizarPortas(servicos);
+  const autoDetectados = [...porMap.values()]
+    .sort((a, b) => a.porta - b.porta)
+    .map(s => ({ origem: 'auto', ...s }));
+
+  const watchlist = (dadosWatch?.watchlist ?? [])
+    .map(w => ({ origem: 'watch', ...w }));
+
+  estado._servicosPorta = [...autoDetectados, ...watchlist];
+  aplicarFiltroPortas();
 }
 
 function renderizarPortas(lista) {
   if (lista.length === 0) {
-    $('#tbody-portas').innerHTML = '<tr><td colspan="4" class="loading-row">Nenhum serviço em escuta detectado</td></tr>';
+    $('#tbody-portas').innerHTML = '<tr><td colspan="6" class="loading-row">Nenhum serviço em escuta detectado</td></tr>';
     return;
   }
   $('#tbody-portas').innerHTML = lista.map(s => {
+    if (s.origem === 'watch') {
+      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
+      const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
+      return `<tr>
+        <td><code style="font-size:11px">${esc(alvo)}</code></td>
+        <td><strong>${esc(s.nome)}</strong></td>
+        <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : 'HTTP(S)'}</span></td>
+        <td>${esc(s.detalhe ?? '—')}</td>
+        <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
+        <td><button class="btn btn-ghost-danger btn-xs" onclick="excluirWatchlist('${esc(s.id)}')" title="Remover monitoramento">✕</button></td>
+      </tr>`;
+    }
+
     const ipsUnicos = [...new Set(s.ips)].slice(0, 6);
     const ipsHtml = ipsUnicos.map(ip => `<code style="font-size:11px;margin-right:4px">${esc(ip)}</code>`).join('');
     return `<tr>
@@ -465,21 +487,122 @@ function renderizarPortas(lista) {
       <td>${esc(s.processo)}</td>
       <td>${s.servico ? `<span class="versao-chip">${esc(s.servico)}</span>` : '—'}</td>
       <td>${ipsHtml}</td>
+      <td><span class="badge badge-unknown">local</span></td>
+      <td></td>
     </tr>`;
   }).join('');
 }
 
-$('#filtro-portas')?.addEventListener('input', (e) => {
-  const termo = e.target.value.toLowerCase().trim();
+function aplicarFiltroPortas() {
+  const termo = ($('#filtro-portas')?.value ?? '').toLowerCase().trim();
   const lista = estado._servicosPorta ?? [];
   if (!termo) { renderizarPortas(lista); return; }
-  renderizarPortas(lista.filter(s =>
-    String(s.porta).includes(termo) ||
-    s.processo.toLowerCase().includes(termo) ||
-    (s.servico ?? '').toLowerCase().includes(termo) ||
-    s.ips.some(ip => ip.includes(termo))
-  ));
+  renderizarPortas(lista.filter(s => {
+    if (s.origem === 'watch') {
+      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
+      return s.nome.toLowerCase().includes(termo) || alvo.toLowerCase().includes(termo);
+    }
+    return String(s.porta).includes(termo) ||
+      s.processo.toLowerCase().includes(termo) ||
+      (s.servico ?? '').toLowerCase().includes(termo) ||
+      s.ips.some(ip => ip.includes(termo));
+  }));
+}
+
+$('#filtro-portas')?.addEventListener('input', aplicarFiltroPortas);
+
+// Atualização silenciosa da watchlist, independente da aba ativa: enquanto
+// houver ao menos um alvo monitorado, a sessão recheca o status a cada 15s
+// sem depender do usuário estar na aba Rede nem recarregar a página.
+async function atualizarWatchlistSilencioso() {
+  const dadosWatch = await api('/api/network/watchlist');
+  const watchlist = (dadosWatch?.watchlist ?? []).map(w => ({ origem: 'watch', ...w }));
+  if (watchlist.length === 0) return;
+
+  const autoDetectados = (estado._servicosPorta ?? []).filter(s => s.origem === 'auto');
+  estado._servicosPorta = [...autoDetectados, ...watchlist];
+
+  if (estado.tabAtiva === 'rede') aplicarFiltroPortas();
+}
+
+// ── Watchlist (alvos TCP/HTTP monitorados manualmente) ────────────────────────
+
+function abrirModalWatchlist() {
+  $('#wl-nome').value = '';
+  $('#wl-tipo').value = 'tcp';
+  $('#wl-host').value = '';
+  $('#wl-porta').value = '';
+  $('#wl-url').value = '';
+  $('#wl-campos-tcp').classList.remove('hidden');
+  $('#wl-campos-http').classList.add('hidden');
+  $('#wl-erro').classList.add('hidden');
+  $('#watchlist-modal').classList.remove('hidden');
+  setTimeout(() => $('#wl-nome').focus(), 50);
+}
+
+$('#btn-add-watchlist')?.addEventListener('click', abrirModalWatchlist);
+
+$('#wl-tipo')?.addEventListener('change', (e) => {
+  const ehTcp = e.target.value === 'tcp';
+  $('#wl-campos-tcp').classList.toggle('hidden', !ehTcp);
+  $('#wl-campos-http').classList.toggle('hidden', ehTcp);
 });
+
+$('#wl-cancelar')?.addEventListener('click', () => {
+  $('#watchlist-modal').classList.add('hidden');
+});
+
+$('#wl-confirmar')?.addEventListener('click', async () => {
+  const erroEl = $('#wl-erro');
+  erroEl.classList.add('hidden');
+
+  const nome = $('#wl-nome').value.trim();
+  const tipo = $('#wl-tipo').value;
+  const body = { nome, tipo };
+
+  if (!nome) {
+    erroEl.textContent = 'Informe um nome.';
+    erroEl.classList.remove('hidden');
+    return;
+  }
+
+  if (tipo === 'tcp') {
+    body.host  = $('#wl-host').value.trim();
+    body.porta = $('#wl-porta').value;
+    if (!body.host || !body.porta) {
+      erroEl.textContent = 'Informe host e porta.';
+      erroEl.classList.remove('hidden');
+      return;
+    }
+  } else {
+    body.url = $('#wl-url').value.trim();
+    if (!body.url) {
+      erroEl.textContent = 'Informe a URL.';
+      erroEl.classList.remove('hidden');
+      return;
+    }
+  }
+
+  const r = await api('/api/network/watchlist', { method: 'POST', body });
+  if (r?.success) {
+    $('#watchlist-modal').classList.add('hidden');
+    toast(`"${nome}" adicionado ao monitoramento`, 'ok');
+    await carregarRede(true);
+  } else {
+    erroEl.textContent = r?.erro ?? 'Erro ao adicionar alvo.';
+    erroEl.classList.remove('hidden');
+  }
+});
+
+async function excluirWatchlist(id) {
+  const r = await api(`/api/network/watchlist/${id}`, { method: 'DELETE' });
+  if (r?.success) {
+    toast('Removido do monitoramento', 'ok');
+    await carregarRede(true);
+  } else {
+    toast(r?.erro ?? 'Erro ao remover', 'erro');
+  }
+}
 
 
 // ── Serviços systemd ──────────────────────────────────────────────────────────
@@ -515,6 +638,12 @@ async function carregarServicos(silencioso = false) {
          <button class="btn btn-warning btn-xs" onclick="atualizarServico(${JSON.stringify(esc(s.pkg))})">Atualizar</button>`
       : '<span class="badge badge-ok">Atualizado</span>';
 
+    const botoesAcao = s.estado === 'active'
+      ? `<button class="btn btn-ghost btn-sm" onclick="acaoServico('restart', '${esc(s.nome)}')">Reiniciar</button>
+         <button class="btn btn-ghost btn-sm" onclick="acaoServico('stop',    '${esc(s.nome)}')">Parar</button>
+         <button class="btn btn-ghost btn-sm" onclick="acaoServico('reload',  '${esc(s.nome)}')">Recarregar</button>`
+      : `<button class="btn btn-ghost btn-sm" onclick="acaoServico('start',   '${esc(s.nome)}')">Iniciar</button>`;
+
     return `<tr>
       <td>
         <div><strong>${esc(s.nome)}</strong></div>
@@ -527,9 +656,7 @@ async function carregarServicos(silencioso = false) {
       <td>${atualizavelHtml}</td>
       <td>
         <div class="acoes">
-          <button class="btn btn-ghost btn-sm" onclick="acaoServico('restart', '${esc(s.nome)}')">Reiniciar</button>
-          <button class="btn btn-ghost btn-sm" onclick="acaoServico('stop',    '${esc(s.nome)}')">Parar</button>
-          <button class="btn btn-ghost btn-sm" onclick="acaoServico('reload',  '${esc(s.nome)}')">Recarregar</button>
+          ${botoesAcao}
         </div>
       </td>
     </tr>`;
@@ -741,6 +868,11 @@ function iniciarMonitoramento() {
     if (estado.tabAtiva === 'servicos')   carregarServicos(true);
     if (estado.tabAtiva === 'containers') carregarContainers(true);
   }, 15000);
+
+  // Watchlist de rede: enquanto houver algum alvo monitorado, recheca a cada 15s
+  // independente da aba ativa (sem recarregar a página)
+  atualizarWatchlistSilencioso();
+  estado.timers.watchlist = setInterval(atualizarWatchlistSilencioso, 15000);
 }
 
 function pararTodosTimers() {

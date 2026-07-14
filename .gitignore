@@ -1,3 +1,7 @@
+# Ignorar configurações do VC Code
+.vscode/
+.claude/
+
 # Ignorar arquivos de log
 logs/
 logs_md/
@@ -29,3 +33,6 @@ monitor/.venv/
 
 # Script temporário gerado em runtime pelo server.py
 monitor/_run_update_container.sh
+
+# Dados de runtime (watchlist de rede etc.), específicos de cada instalação
+monitor/data/

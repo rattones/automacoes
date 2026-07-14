@@ -70,6 +70,57 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════
+     MODAL ADICIONAR ALVO MONITORADO
+═══════════════════════════════════════════════════════════ -->
+<div id="watchlist-modal" class="modal-overlay hidden">
+  <div class="modal-card modal-card-info">
+    <div class="modal-header">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--azul)" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+      </svg>
+      <h3>Adicionar alvo monitorado</h3>
+    </div>
+
+    <div class="field">
+      <label for="wl-nome">Nome</label>
+      <input id="wl-nome" type="text" placeholder="Ex: Servidor de backup" autocomplete="off" maxlength="80">
+    </div>
+
+    <div class="field">
+      <label for="wl-tipo">Tipo de verificação</label>
+      <select id="wl-tipo">
+        <option value="tcp">TCP (host + porta)</option>
+        <option value="http">HTTP(S) (URL)</option>
+      </select>
+    </div>
+
+    <div id="wl-campos-tcp">
+      <div class="field">
+        <label for="wl-host">Host</label>
+        <input id="wl-host" type="text" placeholder="Ex: 192.168.1.10 ou servidor.local" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="wl-porta">Porta</label>
+        <input id="wl-porta" type="number" min="1" max="65535" placeholder="Ex: 443" autocomplete="off">
+      </div>
+    </div>
+
+    <div id="wl-campos-http" class="hidden">
+      <div class="field">
+        <label for="wl-url">URL</label>
+        <input id="wl-url" type="text" placeholder="https://exemplo.com/health" autocomplete="off">
+      </div>
+    </div>
+
+    <div id="wl-erro" class="login-erro hidden"></div>
+    <div class="modal-actions">
+      <button id="wl-cancelar" class="btn btn-ghost">Cancelar</button>
+      <button id="wl-confirmar" class="btn btn-primary">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
      NOTIFICAÇÕES TOAST
 ═══════════════════════════════════════════════════════════ -->
 <div id="toast-container" aria-live="polite"></div>
@@ -253,20 +304,23 @@
             placeholder="Filtrar por porta, processo ou serviço…"
             autocomplete="off"
           >
+          <button class="btn btn-ghost btn-sm" id="btn-add-watchlist">+ Adicionar</button>
         </div>
       </div>
       <div class="table-wrap">
         <table class="data-table" id="tabela-servicos-porta">
           <thead>
             <tr>
-              <th>Porta</th>
-              <th>Processo</th>
-              <th>Serviço systemd</th>
-              <th>IPs em escuta</th>
+              <th>Alvo</th>
+              <th>Nome / Processo</th>
+              <th>Tipo</th>
+              <th>Detalhe</th>
+              <th>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="tbody-portas">
-            <tr><td colspan="4" class="loading-row">Carregando...</td></tr>
+            <tr><td colspan="6" class="loading-row">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
