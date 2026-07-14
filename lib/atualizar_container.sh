@@ -88,18 +88,32 @@ limpar_imagens_antigas() {
     log "Removendo imagens antigas..."
     if docker image prune -f >> "$LOG_FILE" 2>&1; then
         log_sucesso "Imagens antigas removidas com sucesso"
-        
-        # Mostrar espaço liberado
-        local espaco_info=$(docker system df 2>/dev/null)
-        if [ -n "$espaco_info" ]; then
-            log "Uso de espaço do Docker:"
-            echo "$espaco_info" | tee -a "$LOG_FILE"
-        fi
-        return 0
     else
         log_aviso "Falha ao remover imagens antigas"
-        return 1
     fi
+
+    log "Removendo build cache não utilizado..."
+    if docker builder prune -f >> "$LOG_FILE" 2>&1; then
+        log_sucesso "Build cache removido com sucesso"
+    else
+        log_aviso "Falha ao remover build cache"
+    fi
+
+    log "Removendo volumes não utilizados..."
+    if docker volume prune -f >> "$LOG_FILE" 2>&1; then
+        log_sucesso "Volumes não utilizados removidos com sucesso"
+    else
+        log_aviso "Falha ao remover volumes não utilizados"
+    fi
+
+    # Mostrar espaço liberado
+    local espaco_info=$(docker system df 2>/dev/null)
+    if [ -n "$espaco_info" ]; then
+        log "Uso de espaço do Docker:"
+        echo "$espaco_info" | tee -a "$LOG_FILE"
+    fi
+
+    return 0
 }
 
 # Atualizar múltiplos containers

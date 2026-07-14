@@ -29,8 +29,8 @@ verificar_necessidade_reinicializacao() {
             log_aviso "Pacotes que requerem reinicialização: $motivo"
         fi
         
-        log_aviso "Para reiniciar automaticamente, descomente a linha no script principal"
-        # shutdown -r +5 "O servidor será reiniciado em 5 minutos devido a atualizações"
+        log_aviso "Reinicialização automática agendada para daqui a 5 minutos"
+        shutdown -r +5 "O servidor será reiniciado em 5 minutos devido a atualizações"
         return 1
     else
         log_sucesso "Reinicialização não necessária"
