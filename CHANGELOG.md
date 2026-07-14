@@ -5,29 +5,72 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
-## [Unreleased]
-
-### 🐛 Correções
-
-#### Monitor Web — Ações de Serviço/Container (`monitor/scripts/service_action.sh`, `container_action.sh`)
-- **Correção crítica**: checagem de existência de serviço/container usava `systemctl list-unit-files | grep -qF` (e `docker ps | grep -qF`) sob `set -o pipefail`. Quando o `grep -q` encontrava o padrão, fechava o pipe cedo e matava o processo anterior com `SIGPIPE` (exit 141); com `pipefail`, esse 141 virava o status do pipeline e o serviço/container era erroneamente reportado como "não encontrado" — bloqueando parar/reiniciar/recarregar de serviços individuais
-- **Correção**: código de saída da ação (`start`/`stop`/`restart`/`reload`) era sempre capturado como `0` por causa de `|| true` dentro da substituição de comando, mascarando falhas reais do `systemctl`/`docker` como sucesso
-- **Correção**: saída de comandos era interpolada diretamente em string Python delimitada por `'''`; aspas/barras invertidas na saída do `systemctl`/`docker` (comuns em mensagens de erro) podiam quebrar a geração do JSON. Passou a usar variáveis de ambiente lidas via `os.environ`
+## [1.2.0] - 2026-05-08
 
 ### ✨ Novas Funcionalidades
 
-#### Monitor Web — Lista de Serviços (`monitor/scripts/get_services.sh`, `monitor/static/app.js`)
-- **Serviços parados agora aparecem na lista**: antes só eram listados serviços `active`/`failed` (via `systemctl list-units --state=active,failed`); serviços instalados mas nunca carregados nesta sessão do systemd (ex.: desabilitados desde o boot) ficavam invisíveis. Agora a coleta une `list-units --all` com `list-unit-files` (catálogo completo, unidades `enabled`/`disabled`, excluindo templates `foo@.service`)
-- **Novo botão "Iniciar"**: serviços parados agora exibem um botão de start (ação já suportada pelo backend) no lugar de Reiniciar/Parar/Recarregar, que só fazem sentido para serviços ativos
-- **Ordenação**: `failed` → `active` → demais estados, por nome
+#### 🖥️ Monitor Web do Servidor
+- **Novo módulo**: `monitor/` — painel web completo acessível em `http://[IP]:8180`
+- **Backend**: Flask com autenticação PAM (usuário real do sistema)
+- **Frontend**: Vanilla JS, dark mode, atualização automática (5s métricas / 15s abas)
+- **Serviço systemd**: `monitor-servidor.service` (habilitado e persistente)
 
-#### Monitor Web — Watchlist de Rede (`monitor/server.py`, `monitor/static/app.js`, `monitor/templates/index.html`)
-- **Novo botão "+ Adicionar"** na seção "Serviços em Escuta" (aba Rede), abrindo um modal para cadastrar alvos personalizados a monitorar: TCP (host + porta) ou HTTP(S) (URL)
-- **Novos endpoints**: `GET/POST /api/network/watchlist` e `DELETE /api/network/watchlist/<id>`. Checagem de TCP via `socket.create_connection` e de HTTP(S) via `urllib` (stdlib, sem nova dependência), rodando em paralelo com `ThreadPoolExecutor`
-- **Persistência**: lista salva em `monitor/data/watchlist.json` (adicionado ao `.gitignore` por ser dado de runtime específico de cada instalação)
-- **Validação de entrada**: host/porta e URL validados no backend (regex de host, porta 1–65535, esquema `http`/`https` obrigatório) antes de qualquer conexão de saída
-- **Tabela unificada**: alvos monitorados aparecem na mesma tabela dos serviços em escuta auto-detectados, com colunas de Status (online/offline) e um botão de remover (só nas entradas personalizadas)
-- **Atualização em segundo plano**: enquanto houver ao menos um alvo cadastrado, o status é rechecado a cada 15s independente da aba ativa, sem recarregar a página
+**Aba Métricas:**
+- CPU: gauge global + grade de tiles por núcleo com uso % e temperatura (coretemp)
+- GPU: tiles individuais por GPU via `sudo lshw -C video`; barra de uso, temperatura, memória e versão do driver. Suporte a NVIDIA (nvidia-smi), AMD (amdgpu sysfs) e Nouveau
+- RAM: gauge global + DIMMs via `sudo dmidecode --type 17` (slot, tipo DDR, tamanho, fabricante, velocidade)
+- Disco: barras de uso por ponto de montagem
+- Sistema: hostname, kernel, uptime, load average
+
+**Aba Rede:**
+- Tabela de interfaces com estado, MAC, IPs, velocidade rx/tx em Mbps
+- Tabela de portas em escuta com filtro por porta/processo/serviço
+
+**Aba Serviços:**
+- Lista de serviços systemd com estado, versão e ações (reiniciar, parar, recarregar)
+- Detecção de atualizações disponíveis via apt
+
+**Aba Containers:**
+- Lista de containers Docker com estado e ações (start, stop, restart)
+- Atualização de imagem via `docker pull` + `compose up`
+
+**Header:**
+- Botão de refresh manual
+- Botão **Reiniciar Monitor** (amarelo): reinicia `monitor-servidor.service` via sudo e recarrega a página
+- Botão **Reiniciar Servidor** (vermelho): executa `reboot` via sudo
+- Botão Sair
+
+#### 🔧 Módulo de Instalação do Monitor
+- **Novo script**: `lib/post-install/setup-monitor.sh`
+- Instala dependências Python (`flask`, `python-pam`)
+- Cria e habilita serviço systemd `monitor-servidor.service`
+- Configura sudoers para `dmidecode` sem senha
+
+### 🔒 Segurança
+- Rate limiting de login: 5 tentativas / 5 minutos por IP
+- Validação de entradas com regex whitelist (nomes de serviços, containers, ações)
+- Ações destrutivas exigem senha sudo (verificada via `sudo -S -v`, nunca armazenada)
+- `SESSION_COOKIE_HTTPONLY=True`, `SESSION_COOKIE_SAMESITE=Lax`
+- Scripts executados via `subprocess.run` com lista de argumentos (sem shell injection)
+- Proteção contra path traversal em caminhos de containers
+
+### 📊 Estatísticas Atualizadas
+
+- **Scripts principais**: 3
+- **Módulos post-install**: 9 (incluindo setup-monitor)
+- **Bibliotecas**: 7
+- **Scripts de coleta de métricas**: 6 (monitor/scripts/)
+- **Testes**: 107 automatizados
+- **Linhas de código**: ~6.300+
+- **Commits**: 34 até esta release
+
+### 🔗 Links
+
+- [Repositório GitHub](https://github.com/rattones/automacoes)
+- [PR #1 — Monitor Web](https://github.com/rattones/automacoes/pull/1)
+- [Documentação Completa](README.md)
+
+---
 
 ## [1.1.0] - 2026-01-28
 
