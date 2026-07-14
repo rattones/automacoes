@@ -5,6 +5,30 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [Unreleased]
+
+### 🐛 Correções
+
+#### Monitor Web — Ações de Serviço/Container (`monitor/scripts/service_action.sh`, `container_action.sh`)
+- **Correção crítica**: checagem de existência de serviço/container usava `systemctl list-unit-files | grep -qF` (e `docker ps | grep -qF`) sob `set -o pipefail`. Quando o `grep -q` encontrava o padrão, fechava o pipe cedo e matava o processo anterior com `SIGPIPE` (exit 141); com `pipefail`, esse 141 virava o status do pipeline e o serviço/container era erroneamente reportado como "não encontrado" — bloqueando parar/reiniciar/recarregar de serviços individuais
+- **Correção**: código de saída da ação (`start`/`stop`/`restart`/`reload`) era sempre capturado como `0` por causa de `|| true` dentro da substituição de comando, mascarando falhas reais do `systemctl`/`docker` como sucesso
+- **Correção**: saída de comandos era interpolada diretamente em string Python delimitada por `'''`; aspas/barras invertidas na saída do `systemctl`/`docker` (comuns em mensagens de erro) podiam quebrar a geração do JSON. Passou a usar variáveis de ambiente lidas via `os.environ`
+
+### ✨ Novas Funcionalidades
+
+#### Monitor Web — Lista de Serviços (`monitor/scripts/get_services.sh`, `monitor/static/app.js`)
+- **Serviços parados agora aparecem na lista**: antes só eram listados serviços `active`/`failed` (via `systemctl list-units --state=active,failed`); serviços instalados mas nunca carregados nesta sessão do systemd (ex.: desabilitados desde o boot) ficavam invisíveis. Agora a coleta une `list-units --all` com `list-unit-files` (catálogo completo, unidades `enabled`/`disabled`, excluindo templates `foo@.service`)
+- **Novo botão "Iniciar"**: serviços parados agora exibem um botão de start (ação já suportada pelo backend) no lugar de Reiniciar/Parar/Recarregar, que só fazem sentido para serviços ativos
+- **Ordenação**: `failed` → `active` → demais estados, por nome
+
+#### Monitor Web — Watchlist de Rede (`monitor/server.py`, `monitor/static/app.js`, `monitor/templates/index.html`)
+- **Novo botão "+ Adicionar"** na seção "Serviços em Escuta" (aba Rede), abrindo um modal para cadastrar alvos personalizados a monitorar: TCP (host + porta) ou HTTP(S) (URL)
+- **Novos endpoints**: `GET/POST /api/network/watchlist` e `DELETE /api/network/watchlist/<id>`. Checagem de TCP via `socket.create_connection` e de HTTP(S) via `urllib` (stdlib, sem nova dependência), rodando em paralelo com `ThreadPoolExecutor`
+- **Persistência**: lista salva em `monitor/data/watchlist.json` (adicionado ao `.gitignore` por ser dado de runtime específico de cada instalação)
+- **Validação de entrada**: host/porta e URL validados no backend (regex de host, porta 1–65535, esquema `http`/`https` obrigatório) antes de qualquer conexão de saída
+- **Tabela unificada**: alvos monitorados aparecem na mesma tabela dos serviços em escuta auto-detectados, com colunas de Status (online/offline) e um botão de remover (só nas entradas personalizadas)
+- **Atualização em segundo plano**: enquanto houver ao menos um alvo cadastrado, o status é rechecado a cada 15s independente da aba ativa, sem recarregar a página
+
 ## [1.1.0] - 2026-01-28
 
 ### ✨ Novas Funcionalidades

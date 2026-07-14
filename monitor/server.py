@@ -8,13 +8,18 @@ Porta padrão: 8180
 import os
 import re
 import json
+import socket
 import subprocess
 import secrets
 import time
 import logging
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from flask import (
     Flask, render_template, request, session,
@@ -26,6 +31,8 @@ from flask import (
 BASE_DIR   = Path(__file__).parent.resolve()
 SCRIPTS_DIR = BASE_DIR / "scripts"
 PROJ_DIR   = BASE_DIR.parent  # raiz do projeto automacoes
+DATA_DIR   = BASE_DIR / "data"
+WATCHLIST_PATH = DATA_DIR / "watchlist.json"
 
 # Carregar .env se existir
 env_file = BASE_DIR / ".env"
@@ -108,6 +115,7 @@ RE_SERVICO   = re.compile(r'^[a-zA-Z0-9_@.\-]+\.service$')
 RE_CONTAINER = re.compile(r'^[a-zA-Z0-9_.\-]+$')
 RE_ACTION    = re.compile(r'^(start|stop|restart|reload)$')
 RE_USERNAME  = re.compile(r'^[a-z_][a-z0-9_\-]{0,31}$')
+RE_HOST      = re.compile(r'^[a-zA-Z0-9_.\-]+$')
 
 ACOES_CONTAINER = {"start", "stop", "restart"}
 ACOES_SERVICO   = {"start", "stop", "restart", "reload"}
@@ -117,6 +125,44 @@ def _validar_campo(valor: str, pattern: re.Pattern, nome: str) -> str:
     if not valor or not pattern.match(valor):
         raise ValueError(f"Valor inválido para {nome}: {valor!r}")
     return valor
+
+# ── Watchlist de Rede (alvos TCP/HTTP monitorados manualmente) ───────────────
+
+def _carregar_watchlist() -> list[dict]:
+    try:
+        if WATCHLIST_PATH.is_file():
+            return json.loads(WATCHLIST_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error(f"Erro ao ler watchlist: {e}")
+    return []
+
+
+def _salvar_watchlist(itens: list[dict]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    WATCHLIST_PATH.write_text(json.dumps(itens, indent=2, ensure_ascii=False))
+
+
+def _checar_alvo(item: dict) -> dict:
+    """Testa alcançabilidade de um alvo TCP ou HTTP(S). Nunca lança exceção."""
+    inicio = time.monotonic()
+    try:
+        if item["tipo"] == "tcp":
+            with socket.create_connection((item["host"], item["porta"]), timeout=3):
+                pass
+            ms = round((time.monotonic() - inicio) * 1000)
+            return {"online": True, "detalhe": f"{ms} ms"}
+
+        req = Request(item["url"], method="GET", headers={"User-Agent": "monitor-web"})
+        with urlopen(req, timeout=5) as resp:
+            codigo = resp.status
+        ms = round((time.monotonic() - inicio) * 1000)
+        return {"online": codigo < 400, "detalhe": f"HTTP {codigo} — {ms} ms"}
+    except HTTPError as e:
+        return {"online": e.code < 500, "detalhe": f"HTTP {e.code}"}
+    except URLError as e:
+        return {"online": False, "detalhe": str(e.reason)}
+    except OSError as e:
+        return {"online": False, "detalhe": str(e)}
 
 # ── Execução de Scripts ───────────────────────────────────────────────────────
 
@@ -224,24 +270,35 @@ def api_restart_monitor():
         return jsonify({"success": False, "erro": "Senha sudo é obrigatória."}), 400
 
     # Verificar senha antes de agendar o restart
-    r = subprocess.run(
-        ["sudo", "-S", "-v"],
-        input=sudo_pass + "\n",
-        capture_output=True, text=True, timeout=5,
-        env={**os.environ, "TERM": "dumb"}
-    )
+    try:
+        r = subprocess.run(
+            ["sudo", "-S", "-v"],
+            input=sudo_pass + "\n",
+            capture_output=True, text=True, timeout=5,
+            env={**os.environ, "TERM": "dumb"}
+        )
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "erro": "Tempo esgotado ao validar senha sudo."}), 500
+    except OSError as e:
+        logger.error(f"Erro ao executar sudo: {e}")
+        return jsonify({"success": False, "erro": "Erro ao executar sudo."}), 500
+
     if r.returncode != 0:
         return jsonify({"success": False, "erro": "Senha sudo incorreta."}), 400
 
     logger.info(f"Reinicialização do serviço monitor solicitada por {session.get('usuario')}")
-    # Popen com start_new_session para sobreviver ao SIGTERM do restart
-    proc = subprocess.Popen(
-        ["sudo", "-S", "systemctl", "restart", "monitor-servidor.service"],
-        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True
-    )
-    proc.stdin.write((sudo_pass + "\n").encode())
-    proc.stdin.close()
+    try:
+        # Popen com start_new_session para sobreviver ao SIGTERM do restart
+        proc = subprocess.Popen(
+            ["sudo", "-S", "systemctl", "restart", "monitor-servidor.service"],
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+        proc.stdin.write((sudo_pass + "\n").encode())
+        proc.stdin.close()
+    except (OSError, BrokenPipeError) as e:
+        logger.error(f"Erro ao reiniciar serviço monitor: {e}")
+        return jsonify({"success": False, "erro": f"Erro ao reiniciar serviço: {e}"}), 500
     return jsonify({"success": True})
 
 
@@ -254,23 +311,34 @@ def api_reboot():
         return jsonify({"success": False, "erro": "Senha sudo é obrigatória."}), 400
 
     # Verificar senha
-    r = subprocess.run(
-        ["sudo", "-S", "-v"],
-        input=sudo_pass + "\n",
-        capture_output=True, text=True, timeout=5,
-        env={**os.environ, "TERM": "dumb"}
-    )
+    try:
+        r = subprocess.run(
+            ["sudo", "-S", "-v"],
+            input=sudo_pass + "\n",
+            capture_output=True, text=True, timeout=5,
+            env={**os.environ, "TERM": "dumb"}
+        )
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "erro": "Tempo esgotado ao validar senha sudo."}), 500
+    except OSError as e:
+        logger.error(f"Erro ao executar sudo: {e}")
+        return jsonify({"success": False, "erro": "Erro ao executar sudo."}), 500
+
     if r.returncode != 0:
         return jsonify({"success": False, "erro": "Senha sudo incorreta."}), 400
 
     logger.warning(f"Reinicialização do SERVIDOR solicitada por {session.get('usuario')}")
-    proc = subprocess.Popen(
-        ["sudo", "-S", "reboot"],
-        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True
-    )
-    proc.stdin.write((sudo_pass + "\n").encode())
-    proc.stdin.close()
+    try:
+        proc = subprocess.Popen(
+            ["sudo", "-S", "reboot"],
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+        proc.stdin.write((sudo_pass + "\n").encode())
+        proc.stdin.close()
+    except (OSError, BrokenPipeError) as e:
+        logger.error(f"Erro ao executar reboot: {e}")
+        return jsonify({"success": False, "erro": f"Erro ao executar reboot: {e}"}), 500
     return jsonify({"success": True})
 
 
@@ -296,6 +364,73 @@ def api_network():
         except json.JSONDecodeError:
             return jsonify({"erro": "Resposta inválida do script"}), 500
     return jsonify({"erro": saida}), 500
+
+
+@app.route("/api/network/watchlist")
+@login_required
+def api_watchlist():
+    itens = _carregar_watchlist()
+    resultado = []
+    if itens:
+        with ThreadPoolExecutor(max_workers=min(8, len(itens))) as executor:
+            futuros = {executor.submit(_checar_alvo, item): item for item in itens}
+            for futuro in futuros:
+                item = futuros[futuro]
+                resultado.append({**item, **futuro.result()})
+    resultado.sort(key=lambda x: x["nome"].lower())
+    return jsonify({"watchlist": resultado})
+
+
+@app.route("/api/network/watchlist", methods=["POST"])
+@login_required
+def api_watchlist_add():
+    dados = request.get_json(silent=True) or {}
+
+    nome = (dados.get("nome") or "").strip()
+    tipo = dados.get("tipo")
+
+    if not nome or len(nome) > 80:
+        return jsonify({"success": False, "erro": "Nome é obrigatório (até 80 caracteres)."}), 400
+    if tipo not in ("tcp", "http"):
+        return jsonify({"success": False, "erro": "Tipo inválido. Use tcp ou http."}), 400
+
+    item = {"id": secrets.token_hex(8), "nome": nome, "tipo": tipo}
+
+    if tipo == "tcp":
+        host = (dados.get("host") or "").strip()
+        if not host or not RE_HOST.match(host):
+            return jsonify({"success": False, "erro": "Host inválido."}), 400
+        try:
+            porta = int(dados.get("porta"))
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "erro": "Porta inválida."}), 400
+        if not (1 <= porta <= 65535):
+            return jsonify({"success": False, "erro": "Porta deve estar entre 1 e 65535."}), 400
+        item["host"]  = host
+        item["porta"] = porta
+    else:
+        url = (dados.get("url") or "").strip()
+        partes = urlparse(url)
+        if partes.scheme not in ("http", "https") or not partes.netloc:
+            return jsonify({"success": False, "erro": "URL inválida. Use http:// ou https://"}), 400
+        item["url"] = url
+
+    itens = _carregar_watchlist()
+    itens.append(item)
+    _salvar_watchlist(itens)
+
+    return jsonify({"success": True, "item": {**item, **_checar_alvo(item)}})
+
+
+@app.route("/api/network/watchlist/<item_id>", methods=["DELETE"])
+@login_required
+def api_watchlist_delete(item_id):
+    itens = _carregar_watchlist()
+    novos = [i for i in itens if i.get("id") != item_id]
+    if len(novos) == len(itens):
+        return jsonify({"success": False, "erro": "Item não encontrado."}), 404
+    _salvar_watchlist(novos)
+    return jsonify({"success": True})
 
 
 @app.route("/api/services")

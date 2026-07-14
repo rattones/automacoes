@@ -40,39 +40,46 @@ if ! command -v docker &>/dev/null; then
 fi
 
 # Verificar se o container existe
-if ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qF "$CONTAINER"; then
+# (lista é capturada antes do grep para evitar SIGPIPE no docker quando
+# grep -q encontra o padrão e fecha o pipe cedo, o que com `pipefail` fazia
+# o pipeline inteiro reportar falha mesmo com o container existente)
+CONTAINER_NAMES=$(docker ps -a --format '{{.Names}}' 2>/dev/null)
+if ! grep -qF "$CONTAINER" <<< "$CONTAINER_NAMES"; then
     # Tenta por ID
-    if ! docker ps -a --format '{{.ID}}' 2>/dev/null | grep -qF "${CONTAINER:0:12}"; then
+    CONTAINER_IDS=$(docker ps -a --format '{{.ID}}' 2>/dev/null)
+    if ! grep -qF "${CONTAINER:0:12}" <<< "$CONTAINER_IDS"; then
         echo "{\"success\":false,\"output\":\"\",\"error\":\"Container não encontrado: ${CONTAINER}\"}"
         exit 1
     fi
 fi
 
 # ── EXECUÇÃO ──────────────────────────────────────────────────────────────────
-OUTPUT=$(docker "$ACTION" "$CONTAINER" 2>&1 || true)
+# `set +e`/`set -e` em vez de `|| true`: preserva o EXIT_CODE real do docker
+# (com `|| true` dentro da substituição, EXIT_CODE era sempre 0)
+set +e
+OUTPUT=$(docker "$ACTION" "$CONTAINER" 2>&1)
 EXIT_CODE=$?
+set -e
 
 # Estado após a ação
 STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "unknown")
 
 if [ $EXIT_CODE -eq 0 ]; then
-    python3 -c "
-import json
-print(json.dumps({
-    'success': True,
-    'output': '''${OUTPUT}''',
-    'error': '',
-    'status_apos': '${STATUS}'
-}))
-"
+    SUCCESS=true
 else
-    python3 -c "
-import json
+    SUCCESS=false
+fi
+
+# Saída/erro passados via env var (não interpolados no código Python) para
+# evitar que aspas, barras invertidas etc. no output do docker quebrem o script
+SUCCESS="$SUCCESS" OUTPUT="$OUTPUT" STATUS="$STATUS" python3 -c "
+import json, os
+success = os.environ['SUCCESS'] == 'true'
+output = os.environ['OUTPUT']
 print(json.dumps({
-    'success': False,
-    'output': '',
-    'error': '''${OUTPUT}''',
-    'status_apos': '${STATUS}'
+    'success': success,
+    'output': output if success else '',
+    'error': '' if success else output,
+    'status_apos': os.environ['STATUS']
 }))
 "
-fi

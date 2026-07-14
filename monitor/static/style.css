@@ -126,6 +126,15 @@ html, body {
 }
 .field input:focus { border-color: var(--azul); }
 
+.field select {
+  width: 100%; padding: 8px 12px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text); font-size: 14px;
+  transition: border-color .15s;
+  outline: none;
+}
+.field select:focus { border-color: var(--azul); }
+
 .login-erro {
   background: var(--vermelho-dim); border: 1px solid var(--vermelho);
   color: var(--vermelho); border-radius: var(--radius);
@@ -149,6 +158,8 @@ html, body {
   padding: 1.5rem;
   box-shadow: var(--shadow);
 }
+
+.modal-card-info { border-color: var(--azul); }
 
 .modal-header {
   display: flex; align-items: center; gap: 10px;

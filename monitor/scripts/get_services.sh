@@ -38,16 +38,76 @@ try:
 except Exception:
     pass
 
-# ── Listar serviços ativos e com falha ────────────────────────────────────────
+# ── Listar serviços (ativos, com falha e parados) ─────────────────────────────
+# "list-units --all" só enxerga unidades já carregadas ao menos uma vez pelo
+# systemd nesta sessão; serviços instalados mas nunca carregados (ex: desabilitados
+# desde o boot) não aparecem ali. Por isso complementamos com "list-unit-files",
+# que traz todo o catálogo instalado, para não perder serviços parados.
 try:
     r = subprocess.run(
         ["systemctl", "list-units", "--type=service",
-         "--state=active,failed", "--output=json", "--no-pager"],
+         "--all", "--output=json", "--no-pager"],
         capture_output=True, text=True, timeout=10
     )
-    unidades = json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else []
+    carregadas = json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else []
 except Exception:
-    unidades = []
+    carregadas = []
+
+unidades_por_nome = {u.get("unit", ""): u for u in carregadas}
+
+def eh_template(nome):
+    # unidades tipo "foo@.service" (sem instância) não são start/stop-áveis diretamente
+    return nome[:-len(".service")].endswith("@")
+
+try:
+    r = subprocess.run(
+        ["systemctl", "list-unit-files", "--type=service",
+         "--no-legend", "--no-pager"],
+        capture_output=True, text=True, timeout=10
+    )
+    linhas_arquivos = r.stdout.splitlines() if r.returncode == 0 else []
+except Exception:
+    linhas_arquivos = []
+
+nomes_instalados = set()
+for linha in linhas_arquivos:
+    partes = linha.split()
+    if len(partes) < 2:
+        continue
+    nome_arquivo, estado_arquivo = partes[0], partes[1]
+    if estado_arquivo not in ("enabled", "disabled"):
+        continue
+    if not nome_arquivo.endswith(".service") or eh_template(nome_arquivo):
+        continue
+    nomes_instalados.add(nome_arquivo)
+
+# Unidades carregadas + unidades instaladas (enabled/disabled) nunca carregadas
+nomes_finais = set(unidades_por_nome.keys()) | nomes_instalados
+
+# Buscar estado das que só existem no catálogo (nunca carregadas) em uma única chamada
+nomes_sem_dado = sorted(n for n in nomes_instalados if n not in unidades_por_nome)
+if nomes_sem_dado:
+    try:
+        r = subprocess.run(
+            ["systemctl", "show"] + nomes_sem_dado +
+            ["--property=Id,Description,ActiveState,SubState", "--no-pager"],
+            capture_output=True, text=True, timeout=10
+        )
+        blocos = r.stdout.split("\n\n") if r.returncode == 0 else []
+        for bloco in blocos:
+            props = dict(l.split("=", 1) for l in bloco.splitlines() if "=" in l)
+            nome_id = props.get("Id", "")
+            if nome_id:
+                unidades_por_nome[nome_id] = {
+                    "unit": nome_id,
+                    "description": props.get("Description", ""),
+                    "active": props.get("ActiveState", "inactive"),
+                    "sub": props.get("SubState", "dead"),
+                }
+    except Exception:
+        pass
+
+unidades = [unidades_por_nome[n] for n in nomes_finais if n in unidades_por_nome]
 
 def get_versao(nome):
     try:
@@ -107,6 +167,7 @@ for u in unidades:
         "pkg":         pkg
     })
 
-resultado.sort(key=lambda x: (x["estado"] != "failed", x["nome"]))
+ORDEM_ESTADO = {"failed": 0, "active": 1}
+resultado.sort(key=lambda x: (ORDEM_ESTADO.get(x["estado"], 2), x["nome"]))
 print(json.dumps(resultado, indent=2))
 PYEOF
