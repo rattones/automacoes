@@ -130,54 +130,55 @@
 ═══════════════════════════════════════════════════════════ -->
 <div id="app" class="{{ '' if autenticado else 'hidden' }}">
 
-  <!-- ── Header ── -->
-  <header class="header">
-    <div class="header-left">
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--azul)" stroke-width="2">
-        <rect x="2" y="3" width="20" height="14" rx="2"/>
-        <path d="M8 21h8M12 17v4"/>
-      </svg>
-      <span class="header-title">Monitor do Servidor</span>
-      <span id="header-hostname" class="header-hostname"></span>
-    </div>
-    <div class="header-right">
-      <span class="header-user">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
+  <!-- ── Header + Navegação (fixos no topo) ── -->
+  <div class="header-e-tabs">
+    <header class="header">
+      <div class="header-left">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--azul)" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
         </svg>
-        <span id="header-usuario">{{ usuario if autenticado else '' }}</span>
-      </span>
-      <span id="header-uptime" class="header-uptime"></span>
-      <button id="btn-refresh" class="btn btn-ghost btn-sm" title="Atualizar agora">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
-          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-        </svg>
-      </button>
-      <button id="btn-restart-monitor" class="btn btn-ghost-warn btn-sm" title="Reiniciar serviço de monitoramento">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px">
-          <polyline points="23 4 23 10 17 10"/>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>Monitor
-      </button>
-      <button id="btn-reboot" class="btn btn-ghost-danger btn-sm" title="Reiniciar o servidor inteiro">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px">
-          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-          <line x1="12" y1="2" x2="12" y2="12"/>
-        </svg>Servidor
-      </button>
-      <button id="btn-logout" class="btn btn-ghost btn-sm">Sair</button>
-    </div>
-  </header>
+        <span class="header-title">Monitor do Servidor</span>
+        <span id="header-hostname" class="header-hostname"></span>
+      </div>
+      <div class="header-right">
+        <span class="header-user">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span id="header-usuario">{{ usuario if autenticado else '' }}</span>
+        </span>
+        <span id="header-uptime" class="header-uptime"></span>
+        <button id="btn-refresh" class="btn btn-ghost btn-sm" title="Atualizar agora">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+        <button id="btn-restart-monitor" class="btn btn-ghost-warn btn-sm" title="Reiniciar serviço de monitoramento">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>Monitor
+        </button>
+        <button id="btn-reboot" class="btn btn-ghost-danger btn-sm" title="Reiniciar o servidor inteiro">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+            <line x1="12" y1="2" x2="12" y2="12"/>
+          </svg>Servidor
+        </button>
+        <button id="btn-logout" class="btn btn-ghost btn-sm">Sair</button>
+      </div>
+    </header>
 
-  <!-- ── Navegação ── -->
-  <nav class="nav-tabs">
-    <button class="tab active" data-tab="metricas">Métricas</button>
-    <button class="tab" data-tab="rede">Rede</button>
-    <button class="tab" data-tab="servicos">Serviços</button>
-    <button class="tab" data-tab="containers">Containers</button>
-  </nav>
+    <nav class="nav-tabs">
+      <button class="tab active" data-tab="metricas">Métricas</button>
+      <button class="tab" data-tab="rede">Rede</button>
+      <button class="tab" data-tab="servicos">Serviços</button>
+      <button class="tab" data-tab="containers">Containers</button>
+    </nav>
+  </div>
 
   <main class="main-content">
 
