@@ -4,13 +4,17 @@
 
 'use strict';
 
-import { $, esc } from '../utils.js';
+import { $, esc, formatBytes } from '../utils.js';
 import { api, toast } from '../api.js';
-import { pedirSudo, mostrarOutput } from '../ui.js';
+import { pedirSudo, mostrarOutput, setGauge } from '../ui.js';
+
+// Nomes de containers com a linha de stats expandida — preservado entre
+// refreshes silenciosos, que re-renderizam a tabela inteira via innerHTML.
+const expandidos = new Set();
 
 export async function carregarContainers(silencioso = false) {
   if (!silencioso) {
-    $('#tbody-containers').innerHTML = '<tr><td colspan="5" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-containers').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
   }
 
   const dados = await api('/api/services');
@@ -29,7 +33,7 @@ export async function carregarContainers(silencioso = false) {
   });
 
   if (containers.length === 0) {
-    $('#tbody-containers').innerHTML = '<tr><td colspan="5" class="loading-row">Nenhum container encontrado (ou Docker não está rodando)</td></tr>';
+    $('#tbody-containers').innerHTML = '<tr><td colspan="6" class="loading-row">Nenhum container encontrado (ou Docker não está rodando)</td></tr>';
     return;
   }
 
@@ -56,7 +60,14 @@ export async function carregarContainers(silencioso = false) {
            Atualizar</button>`
       : '';
 
+    const idGauge = `gauge-ctn-${esc(c.id)}`;
+    const expandido = expandidos.has(c.nome);
+
     return `<tr>
+      <td>
+        <button class="btn-expandir${expandido ? ' expandido' : ''}"
+          onclick="toggleStatsContainer(this, '${esc(c.nome)}')" title="Ver uso de recursos">▶</button>
+      </td>
       <td>
         <div><strong>${esc(c.nome)}</strong></div>
         <div style="font-size:11px;color:var(--text-dim)">${esc(c.id)}</div>
@@ -75,9 +86,78 @@ export async function carregarContainers(silencioso = false) {
           ${updateBtn}
         </div>
       </td>
+    </tr>
+    <tr class="container-stats-row${expandido ? '' : ' hidden'}" data-stats-de="${esc(c.nome)}">
+      <td colspan="6">${renderizarStatsContainer(c.stats, idGauge)}</td>
     </tr>`;
   }).join('');
+
+  // Gauges são SVG com atributos próprios — precisam ser inicializados via
+  // setGauge() depois de inseridos no DOM (innerHTML não executa isso sozinho).
+  containers.forEach(c => {
+    if (c.stats?.cpu_pct != null) setGauge(`gauge-ctn-${c.id}`, c.stats.cpu_pct);
+  });
 }
+
+function nivelClasse(pct) {
+  if (pct == null) return '';
+  return pct >= 90 ? 'nivel-critico' : pct >= 70 ? 'nivel-aviso' : '';
+}
+
+function renderizarStatsContainer(stats, idGauge) {
+  if (!stats) {
+    return '<div class="container-stats-sem-dados">Sem dados de uso (container parado ou stats indisponível)</div>';
+  }
+
+  const memPct = stats.mem_pct;
+  const memBarClass = nivelClasse(memPct);
+
+  const cpuHtml = `<div class="stat-item">
+    <span class="stat-item-label">CPU</span>
+    <div class="gauge-wrap gauge-wrap-sm">
+      <svg class="gauge" viewBox="0 0 120 120">
+        <circle class="gauge-track" cx="60" cy="60" r="50"/>
+        <circle class="gauge-fill" id="${idGauge}" cx="60" cy="60" r="50" stroke-dasharray="0 314"/>
+      </svg>
+      <div class="gauge-center"><span class="gauge-value">${stats.cpu_pct != null ? stats.cpu_pct.toFixed(1) + '%' : '—'}</span></div>
+    </div>
+  </div>`;
+
+  const memHtml = `<div class="stat-item">
+    <span class="stat-item-label">Memória</span>
+    <div class="stat-bar-wrap"><div class="stat-bar ${memBarClass}" style="width:${memPct ?? 0}%"></div></div>
+    <span class="stat-item-valor">${stats.mem_usado != null ? `${formatBytes(stats.mem_usado)} / ${formatBytes(stats.mem_limite)}` : '—'}</span>
+  </div>`;
+
+  const redeHtml = `<div class="stat-item">
+    <span class="stat-item-label">Rede (rx / tx)</span>
+    <span class="stat-item-valor">${stats.net_rx != null ? `↓ ${formatBytes(stats.net_rx)} / ↑ ${formatBytes(stats.net_tx)}` : '—'}</span>
+  </div>`;
+
+  const discoHtml = `<div class="stat-item">
+    <span class="stat-item-label">Disco (leitura / escrita)</span>
+    <span class="stat-item-valor">${stats.disco_leitura != null ? `${formatBytes(stats.disco_leitura)} / ${formatBytes(stats.disco_escrita)}` : '—'}</span>
+  </div>`;
+
+  const swapHtml = `<div class="stat-item">
+    <span class="stat-item-label">Swap</span>
+    <span class="stat-item-valor">${stats.swap_usado != null ? (stats.swap_usado > 0 ? formatBytes(stats.swap_usado) : 'Sem swap') : '—'}</span>
+  </div>`;
+
+  return `<div class="container-stats-grid">${cpuHtml}${memHtml}${redeHtml}${discoHtml}${swapHtml}</div>`;
+}
+
+function toggleStatsContainer(botao, nome) {
+  if (expandidos.has(nome)) {
+    expandidos.delete(nome);
+  } else {
+    expandidos.add(nome);
+  }
+
+  botao.classList.toggle('expandido');
+  $(`tr[data-stats-de="${nome}"]`)?.classList.toggle('hidden');
+}
+window.toggleStatsContainer = toggleStatsContainer;
 
 async function acaoContainer(acao, container) {
   const r = await api('/api/container/action', {

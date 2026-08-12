@@ -497,6 +497,54 @@ html, body {
 /* ── Ações na tabela ───────────────────────────────────── */
 .acoes { display: flex; gap: .3rem; flex-wrap: nowrap; }
 
+/* ── Linha expansível de stats de container ───────────────────────────── */
+.btn-expandir {
+  background: none; border: none; cursor: pointer; color: var(--text-muted);
+  padding: 2px 4px; font-size: 11px; line-height: 1;
+  transition: transform .2s ease, color .2s ease;
+}
+.btn-expandir:hover { color: var(--text); }
+.btn-expandir.expandido { transform: rotate(90deg); }
+
+.container-stats-row td {
+  background: var(--bg-card2);
+  padding: .75rem 1rem;
+}
+
+.container-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .75rem;
+}
+
+.container-stats-sem-dados {
+  color: var(--text-muted); font-size: 12px; padding: .25rem 0;
+}
+
+.stat-item {
+  display: flex; flex-direction: column; align-items: center; gap: .25rem;
+}
+.stat-item-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-muted);
+}
+
+/* Gauge circular compacto (variante de .gauge-wrap para caber na linha) */
+.gauge-wrap-sm { width: 56px; height: 56px; }
+.gauge-wrap-sm .gauge-value { font-size: .85rem; }
+.gauge-wrap-sm .gauge-sub   { display: none; }
+
+.stat-bar-wrap {
+  width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+}
+.stat-bar {
+  height: 100%; border-radius: 3px; background: var(--azul); transition: width .5s ease;
+}
+.stat-bar.nivel-aviso   { background: var(--amarelo); }
+.stat-bar.nivel-critico { background: var(--vermelho); }
+
+.stat-item-valor { font-size: 11px; color: var(--text); text-align: center; }
+
 /* ── Output Box ────────────────────────────────────────── */
 .output-box {
   margin-top: 1rem;
