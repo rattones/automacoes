@@ -1,0 +1,221 @@
+/**
+ * Monitor do Servidor — Aba Rede (interfaces, serviços em escuta e watchlist).
+ */
+
+'use strict';
+
+import { $, esc } from '../utils.js';
+import { api, toast } from '../api.js';
+import { estado } from '../state.js';
+
+export async function carregarRede(silencioso = false) {
+  if (!silencioso) {
+    $('#tbody-interfaces').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-portas').innerHTML     = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
+  }
+
+  const [dados, dadosWatch] = await Promise.all([
+    api('/api/network'),
+    api('/api/network/watchlist'),
+  ]);
+  if (!dados) return;
+  estado.dadosRede = dados;
+
+  // Interfaces
+  const uso = dados.uso_rede ?? {};
+  const ifaces = (dados.interfaces ?? []).filter(i =>
+    i.nome !== 'lo' && !i.nome.startsWith('docker') && !i.nome.startsWith('br-')
+  );
+
+  if (ifaces.length === 0) {
+    $('#tbody-interfaces').innerHTML = '<tr><td colspan="6" class="loading-row">Nenhuma interface encontrada</td></tr>';
+  } else {
+    $('#tbody-interfaces').innerHTML = ifaces.map(iface => {
+      const u = uso[iface.nome] ?? {};
+      const estadoBadge = iface.estado === 'up' ? 'badge-running' : 'badge-stopped';
+      const ips = (iface.enderecos ?? [])
+        .map(a => `<span class="versao-chip">${esc(a.ip)}/${a.prefixo}</span>`)
+        .join(' ');
+      return `<tr>
+        <td><strong>${esc(iface.nome)}</strong></td>
+        <td><span class="badge ${estadoBadge}">${esc(iface.estado)}</span></td>
+        <td><code style="font-size:11px;color:var(--text-muted)">${esc(iface.mac || '—')}</code></td>
+        <td>${ips || '—'}</td>
+        <td>${u.rx_mbps != null ? u.rx_mbps.toFixed(3) : '—'}</td>
+        <td>${u.tx_mbps != null ? u.tx_mbps.toFixed(3) : '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Serviços por porta — deduplicar por número de porta, apenas com processo identificado
+  const servicosBrutos = (dados.servicos ?? [])
+    .filter(s => s.porta > 0 && s.processo);
+
+  // Agrupar por porta: coletar todos os IPs e manter o mais completo
+  const porMap = new Map();
+  for (const s of servicosBrutos) {
+    if (!porMap.has(s.porta)) {
+      porMap.set(s.porta, { ...s, ips: [s.ip] });
+    } else {
+      porMap.get(s.porta).ips.push(s.ip);
+      if (!porMap.get(s.porta).servico && s.servico) {
+        porMap.get(s.porta).servico = s.servico;
+      }
+    }
+  }
+  const autoDetectados = [...porMap.values()]
+    .sort((a, b) => a.porta - b.porta)
+    .map(s => ({ origem: 'auto', ...s }));
+
+  const watchlist = (dadosWatch?.watchlist ?? [])
+    .map(w => ({ origem: 'watch', ...w }));
+
+  estado._servicosPorta = [...autoDetectados, ...watchlist];
+  aplicarFiltroPortas();
+}
+
+function renderizarPortas(lista) {
+  if (lista.length === 0) {
+    $('#tbody-portas').innerHTML = '<tr><td colspan="6" class="loading-row">Nenhum serviço em escuta detectado</td></tr>';
+    return;
+  }
+  $('#tbody-portas').innerHTML = lista.map(s => {
+    if (s.origem === 'watch') {
+      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
+      const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
+      return `<tr>
+        <td><code style="font-size:11px">${esc(alvo)}</code></td>
+        <td><strong>${esc(s.nome)}</strong></td>
+        <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : 'HTTP(S)'}</span></td>
+        <td>${esc(s.detalhe ?? '—')}</td>
+        <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
+        <td><button class="btn btn-ghost-danger btn-xs" onclick="excluirWatchlist('${esc(s.id)}')" title="Remover monitoramento">✕</button></td>
+      </tr>`;
+    }
+
+    const ipsUnicos = [...new Set(s.ips)].slice(0, 6);
+    const ipsHtml = ipsUnicos.map(ip => `<code style="font-size:11px;margin-right:4px">${esc(ip)}</code>`).join('');
+    return `<tr>
+      <td><strong>${esc(s.porta)}</strong></td>
+      <td>${esc(s.processo)}</td>
+      <td>${s.servico ? `<span class="versao-chip">${esc(s.servico)}</span>` : '—'}</td>
+      <td>${ipsHtml}</td>
+      <td><span class="badge badge-unknown">local</span></td>
+      <td></td>
+    </tr>`;
+  }).join('');
+}
+
+function aplicarFiltroPortas() {
+  const termo = ($('#filtro-portas')?.value ?? '').toLowerCase().trim();
+  const lista = estado._servicosPorta ?? [];
+  if (!termo) { renderizarPortas(lista); return; }
+  renderizarPortas(lista.filter(s => {
+    if (s.origem === 'watch') {
+      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
+      return s.nome.toLowerCase().includes(termo) || alvo.toLowerCase().includes(termo);
+    }
+    return String(s.porta).includes(termo) ||
+      s.processo.toLowerCase().includes(termo) ||
+      (s.servico ?? '').toLowerCase().includes(termo) ||
+      s.ips.some(ip => ip.includes(termo));
+  }));
+}
+
+$('#filtro-portas')?.addEventListener('input', aplicarFiltroPortas);
+
+// Atualização silenciosa da watchlist, independente da aba ativa: enquanto
+// houver ao menos um alvo monitorado, a sessão recheca o status a cada 15s
+// sem depender do usuário estar na aba Rede nem recarregar a página.
+export async function atualizarWatchlistSilencioso() {
+  const dadosWatch = await api('/api/network/watchlist');
+  const watchlist = (dadosWatch?.watchlist ?? []).map(w => ({ origem: 'watch', ...w }));
+  if (watchlist.length === 0) return;
+
+  const autoDetectados = (estado._servicosPorta ?? []).filter(s => s.origem === 'auto');
+  estado._servicosPorta = [...autoDetectados, ...watchlist];
+
+  if (estado.tabAtiva === 'rede') aplicarFiltroPortas();
+}
+
+// ── Watchlist (alvos TCP/HTTP monitorados manualmente) ────────────────────────
+
+function abrirModalWatchlist() {
+  $('#wl-nome').value = '';
+  $('#wl-tipo').value = 'tcp';
+  $('#wl-host').value = '';
+  $('#wl-porta').value = '';
+  $('#wl-url').value = '';
+  $('#wl-campos-tcp').classList.remove('hidden');
+  $('#wl-campos-http').classList.add('hidden');
+  $('#wl-erro').classList.add('hidden');
+  $('#watchlist-modal').classList.remove('hidden');
+  setTimeout(() => $('#wl-nome').focus(), 50);
+}
+
+$('#btn-add-watchlist')?.addEventListener('click', abrirModalWatchlist);
+
+$('#wl-tipo')?.addEventListener('change', (e) => {
+  const ehTcp = e.target.value === 'tcp';
+  $('#wl-campos-tcp').classList.toggle('hidden', !ehTcp);
+  $('#wl-campos-http').classList.toggle('hidden', ehTcp);
+});
+
+$('#wl-cancelar')?.addEventListener('click', () => {
+  $('#watchlist-modal').classList.add('hidden');
+});
+
+$('#wl-confirmar')?.addEventListener('click', async () => {
+  const erroEl = $('#wl-erro');
+  erroEl.classList.add('hidden');
+
+  const nome = $('#wl-nome').value.trim();
+  const tipo = $('#wl-tipo').value;
+  const body = { nome, tipo };
+
+  if (!nome) {
+    erroEl.textContent = 'Informe um nome.';
+    erroEl.classList.remove('hidden');
+    return;
+  }
+
+  if (tipo === 'tcp') {
+    body.host  = $('#wl-host').value.trim();
+    body.porta = $('#wl-porta').value;
+    if (!body.host || !body.porta) {
+      erroEl.textContent = 'Informe host e porta.';
+      erroEl.classList.remove('hidden');
+      return;
+    }
+  } else {
+    body.url = $('#wl-url').value.trim();
+    if (!body.url) {
+      erroEl.textContent = 'Informe a URL.';
+      erroEl.classList.remove('hidden');
+      return;
+    }
+  }
+
+  const r = await api('/api/network/watchlist', { method: 'POST', body });
+  if (r?.success) {
+    $('#watchlist-modal').classList.add('hidden');
+    toast(`"${nome}" adicionado ao monitoramento`, 'ok');
+    await carregarRede(true);
+  } else {
+    erroEl.textContent = r?.erro ?? 'Erro ao adicionar alvo.';
+    erroEl.classList.remove('hidden');
+  }
+});
+
+async function excluirWatchlist(id) {
+  const r = await api(`/api/network/watchlist/${id}`, { method: 'DELETE' });
+  if (r?.success) {
+    toast('Removido do monitoramento', 'ok');
+    await carregarRede(true);
+  } else {
+    toast(r?.erro ?? 'Erro ao remover', 'erro');
+  }
+}
+window.excluirWatchlist = excluirWatchlist;
+
+$('#btn-refresh-rede')?.addEventListener('click', carregarRede);
