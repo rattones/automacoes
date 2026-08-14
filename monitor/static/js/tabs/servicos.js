@@ -117,4 +117,4 @@ $('#btn-atualizar-sistema')?.addEventListener('click', () => {
   );
 });
 
-$('#btn-refresh-servicos')?.addEventListener('click', carregarServicos);
+$('#btn-refresh-servicos')?.addEventListener('click', () => carregarServicos());

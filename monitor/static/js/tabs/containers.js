@@ -194,4 +194,4 @@ async function atualizarContainer(nome, caminho) {
 }
 window.atualizarContainer = atualizarContainer;
 
-$('#btn-refresh-containers')?.addEventListener('click', carregarContainers);
+$('#btn-refresh-containers')?.addEventListener('click', () => carregarContainers());

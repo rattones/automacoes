@@ -218,4 +218,4 @@ async function excluirWatchlist(id) {
 }
 window.excluirWatchlist = excluirWatchlist;
 
-$('#btn-refresh-rede')?.addEventListener('click', carregarRede);
+$('#btn-refresh-rede')?.addEventListener('click', () => carregarRede());
