@@ -36,6 +36,30 @@ for iface in ifaces_raw:
         "enderecos": enderecos
     })
 
+# ── Resolução de serviço systemd a partir do PID ──────────────────────────────
+# Lê /proc/<pid>/cgroup diretamente (leitura de arquivo, sem spawnar processo)
+# em vez de rodar "systemctl status <pid>" por porta — em hosts com centenas/
+# milhares de sockets em escuta (Docker, Samba, etc.), um subprocess por PID
+# facilmente estoura o timeout da API (10s). Resultado cacheado por PID, já
+# que o mesmo processo pode aparecer em várias linhas do ss.
+RE_SERVICE = re.compile(r'([^/]+\.service)$')
+_cache_servico: dict[int, str] = {}
+
+def _servico_de_pid(pid: int) -> str:
+    if pid in _cache_servico:
+        return _cache_servico[pid]
+    nome = ""
+    try:
+        with open(f"/proc/{pid}/cgroup") as f:
+            conteudo = f.read()
+        m = RE_SERVICE.search(conteudo)
+        if m:
+            nome = m.group(1)
+    except Exception:
+        pass
+    _cache_servico[pid] = nome
+    return nome
+
 # ── Serviços escutando por porta/IP ───────────────────────────────────────────
 try:
     r = subprocess.run(["sudo", "ss", "-tlnp"],
@@ -74,16 +98,7 @@ for linha in linhas[1:]:
         if m_pid:
             pid = int(m_pid.group(1))
 
-    servico_nome = ""
-    if pid:
-        try:
-            r2 = subprocess.run(["systemctl", "status", str(pid)],
-                                capture_output=True, text=True, timeout=2)
-            m_svc = re.search(r'●\s+(\S+\.service)', r2.stdout)
-            if m_svc:
-                servico_nome = m_svc.group(1)
-        except Exception:
-            pass
+    servico_nome = _servico_de_pid(pid) if pid else ""
 
     servicos.append({
         "ip":       ip,
