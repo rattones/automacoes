@@ -10,8 +10,9 @@ import { estado } from '../state.js';
 
 export async function carregarRede(silencioso = false) {
   if (!silencioso) {
-    $('#tbody-interfaces').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
-    $('#tbody-portas').innerHTML     = '<tr><td colspan="7" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-interfaces').innerHTML  = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-portas').innerHTML      = '<tr><td colspan="7" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-portas-auto').innerHTML = '<tr><td colspan="4" class="loading-row">Carregando...</td></tr>';
   }
 
   const [dados, dadosWatch] = await Promise.all([
@@ -47,7 +48,7 @@ export async function carregarRede(silencioso = false) {
     }).join('');
   }
 
-  // Serviços por porta — deduplicar por número de porta, apenas com processo identificado
+  // Portas detectadas automaticamente — deduplicar por número de porta, apenas com processo identificado
   const servicosBrutos = (dados.servicos ?? [])
     .filter(s => s.porta > 0 && s.processo);
 
@@ -63,15 +64,13 @@ export async function carregarRede(silencioso = false) {
       }
     }
   }
-  const autoDetectados = [...porMap.values()]
-    .sort((a, b) => a.porta - b.porta)
-    .map(s => ({ origem: 'auto', ...s }));
+  estado._portasAuto = [...porMap.values()].sort((a, b) => a.porta - b.porta);
 
-  const watchlist = (dadosWatch?.watchlist ?? [])
+  estado._servicosPorta = (dadosWatch?.watchlist ?? [])
     .map(w => ({ origem: 'watch', ...w }));
 
-  estado._servicosPorta = [...autoDetectados, ...watchlist];
   aplicarFiltroPortas();
+  aplicarFiltroPortasAuto();
 }
 
 // Mini gráfico (sparkline) em SVG com os últimos N pontos de latência (ms).
@@ -117,34 +116,20 @@ function sparklineSvg(pontos) {
 
 function renderizarPortas(lista) {
   if (lista.length === 0) {
-    $('#tbody-portas').innerHTML = '<tr><td colspan="7" class="loading-row">Nenhum serviço em escuta detectado</td></tr>';
+    $('#tbody-portas').innerHTML = '<tr><td colspan="7" class="loading-row">Nenhum serviço monitorado. Use "+ Adicionar" para incluir um alvo.</td></tr>';
     return;
   }
   $('#tbody-portas').innerHTML = lista.map(s => {
-    if (s.origem === 'watch') {
-      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : (s.porta ? `${s.url} (:${s.porta})` : s.url);
-      const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
-      return `<tr>
-        <td><code style="font-size:11px">${esc(alvo)}</code></td>
-        <td><strong>${esc(s.nome)}</strong></td>
-        <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : 'HTTP(S)'}</span></td>
-        <td>${esc(s.detalhe ?? '—')}</td>
-        <td>${sparklineSvg(s.historico)}</td>
-        <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
-        <td><button class="btn btn-ghost-danger btn-xs" onclick="excluirWatchlist('${esc(s.id)}')" title="Remover monitoramento">✕</button></td>
-      </tr>`;
-    }
-
-    const ipsUnicos = [...new Set(s.ips)].slice(0, 6);
-    const ipsHtml = ipsUnicos.map(ip => `<code style="font-size:11px;margin-right:4px">${esc(ip)}</code>`).join('');
+    const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : (s.porta ? `${s.url} (:${s.porta})` : s.url);
+    const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
     return `<tr>
-      <td><strong>${esc(s.porta)}</strong></td>
-      <td>${esc(s.processo)}</td>
-      <td>${s.servico ? `<span class="versao-chip">${esc(s.servico)}</span>` : '—'}</td>
-      <td>${ipsHtml}</td>
-      <td><span class="sparkline-vazio">—</span></td>
-      <td><span class="badge badge-unknown">local</span></td>
-      <td></td>
+      <td><code style="font-size:11px">${esc(alvo)}</code></td>
+      <td><strong>${esc(s.nome)}</strong></td>
+      <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : 'HTTP(S)'}</span></td>
+      <td>${esc(s.detalhe ?? '—')}</td>
+      <td>${sparklineSvg(s.historico)}</td>
+      <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
+      <td><button class="btn btn-ghost-danger btn-xs" onclick="excluirWatchlist('${esc(s.id)}')" title="Remover monitoramento">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -154,29 +139,58 @@ function aplicarFiltroPortas() {
   const lista = estado._servicosPorta ?? [];
   if (!termo) { renderizarPortas(lista); return; }
   renderizarPortas(lista.filter(s => {
-    if (s.origem === 'watch') {
-      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
-      return s.nome.toLowerCase().includes(termo) || alvo.toLowerCase().includes(termo);
-    }
-    return String(s.porta).includes(termo) ||
-      s.processo.toLowerCase().includes(termo) ||
-      (s.servico ?? '').toLowerCase().includes(termo) ||
-      s.ips.some(ip => ip.includes(termo));
+    const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
+    return s.nome.toLowerCase().includes(termo) || alvo.toLowerCase().includes(termo);
   }));
 }
 
 $('#filtro-portas')?.addEventListener('input', aplicarFiltroPortas);
+
+// ── Portas detectadas automaticamente (não monitoradas manualmente) ──────────
+
+function renderizarPortasAuto(lista) {
+  const contagem = $('#contagem-portas-auto');
+  if (contagem) contagem.textContent = lista.length;
+
+  if (lista.length === 0) {
+    $('#tbody-portas-auto').innerHTML = '<tr><td colspan="4" class="loading-row">Nenhuma porta detectada</td></tr>';
+    return;
+  }
+  $('#tbody-portas-auto').innerHTML = lista.map(s => {
+    const ipsUnicos = [...new Set(s.ips)].slice(0, 6);
+    const ipsHtml = ipsUnicos.map(ip => `<code style="font-size:11px;margin-right:4px">${esc(ip)}</code>`).join('');
+    return `<tr>
+      <td><strong>${esc(s.porta)}</strong></td>
+      <td>${esc(s.processo)}</td>
+      <td>${s.servico ? `<span class="versao-chip">${esc(s.servico)}</span>` : '—'}</td>
+      <td>${ipsHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+function aplicarFiltroPortasAuto() {
+  const termo = ($('#filtro-portas-auto')?.value ?? '').toLowerCase().trim();
+  const lista = estado._portasAuto ?? [];
+  if (!termo) { renderizarPortasAuto(lista); return; }
+  renderizarPortasAuto(lista.filter(s =>
+    String(s.porta).includes(termo) ||
+    s.processo.toLowerCase().includes(termo) ||
+    (s.servico ?? '').toLowerCase().includes(termo) ||
+    s.ips.some(ip => ip.includes(termo))
+  ));
+}
+
+$('#filtro-portas-auto')?.addEventListener('input', aplicarFiltroPortasAuto);
 
 // Atualização silenciosa da watchlist, independente da aba ativa: enquanto
 // houver ao menos um alvo monitorado, a sessão recheca o status a cada 15s
 // sem depender do usuário estar na aba Rede nem recarregar a página.
 export async function atualizarWatchlistSilencioso() {
   const dadosWatch = await api('/api/network/watchlist');
-  const watchlist = (dadosWatch?.watchlist ?? []).map(w => ({ origem: 'watch', ...w }));
+  const watchlist = dadosWatch?.watchlist ?? [];
   if (watchlist.length === 0) return;
 
-  const autoDetectados = (estado._servicosPorta ?? []).filter(s => s.origem === 'auto');
-  estado._servicosPorta = [...autoDetectados, ...watchlist];
+  estado._servicosPorta = watchlist.map(w => ({ origem: 'watch', ...w }));
 
   if (estado.tabAtiva === 'rede') aplicarFiltroPortas();
 }

@@ -450,6 +450,23 @@ html, body {
 }
 .input-filtro:focus { border-color: var(--accent); }
 
+/* ── Seção colapsável (details/summary) ───────────────────── */
+.secao-colapsavel { border-top: 1px solid var(--border); padding-top: 1rem; }
+.secao-colapsavel summary {
+  display: flex; align-items: center; gap: .5rem;
+  cursor: pointer; user-select: none;
+  font-size: 15px; font-weight: 600; color: var(--text);
+  list-style: none;
+}
+.secao-colapsavel summary::-webkit-details-marker { display: none; }
+.secao-colapsavel summary::before {
+  content: '▶'; display: inline-block; font-size: 10px; color: var(--text-muted);
+  transition: transform .15s;
+}
+.secao-colapsavel[open] summary::before { transform: rotate(90deg); }
+.secao-colapsavel summary:hover { color: var(--accent); }
+.secao-colapsavel .section-header { margin-top: .75rem; }
+
 /* ── Tabelas ───────────────────────────────────────────── */
 .table-wrap {
   overflow-x: auto;

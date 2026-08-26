@@ -298,7 +298,7 @@
         </table>
       </div>
 
-      <!-- Serviços por porta/IP -->
+      <!-- Serviços monitorados manualmente (watchlist) -->
       <div class="section-header" style="margin-top:2rem">
         <h2>Serviços em Escuta</h2>
         <div class="section-actions">
@@ -306,7 +306,7 @@
             type="search"
             id="filtro-portas"
             class="input-filtro"
-            placeholder="Filtrar por porta, processo ou serviço…"
+            placeholder="Filtrar por nome ou alvo…"
             autocomplete="off"
           >
           <button class="btn btn-ghost btn-sm" id="btn-add-watchlist">+ Adicionar</button>
@@ -330,6 +330,40 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Portas em escuta detectadas automaticamente (não monitoradas) -->
+      <details class="secao-colapsavel" style="margin-top:2rem">
+        <summary>
+          <span>Portas Detectadas Automaticamente</span>
+          <span class="versao-chip" id="contagem-portas-auto">0</span>
+        </summary>
+        <div class="section-header">
+          <div class="section-actions">
+            <input
+              type="search"
+              id="filtro-portas-auto"
+              class="input-filtro"
+              placeholder="Filtrar por porta, processo ou serviço…"
+              autocomplete="off"
+            >
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="tabela-portas-auto">
+            <thead>
+              <tr>
+                <th>Porta</th>
+                <th>Processo</th>
+                <th>Serviço</th>
+                <th>IPs</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-portas-auto">
+              <tr><td colspan="4" class="loading-row">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
 
     </section>
 
