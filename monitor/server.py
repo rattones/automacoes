@@ -14,6 +14,7 @@ import secrets
 import time
 import logging
 import threading
+import ssl
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
@@ -47,6 +48,8 @@ if env_file.is_file():
 
 SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 PORTA      = int(os.environ.get("MONITOR_PORTA", 8180))
+CERT_PATH  = os.environ.get("CERT_PATH", "").strip()
+KEY_PATH   = os.environ.get("KEY_PATH", "").strip()
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -223,6 +226,37 @@ def _checar_alvo(item: dict) -> dict:
     except OSError as e:
         historico = _registrar_historico(item["id"], None)
         return {"online": False, "detalhe": str(e), "historico": historico}
+
+# ── TLS / HTTPS ────────────────────────────────────────────────────────────────
+
+def _carregar_ssl_context() -> ssl.SSLContext | None:
+    """
+    Monta o contexto TLS a partir de CERT_PATH/KEY_PATH. Retorna None se as
+    variáveis não estiverem configuradas (o servidor sobe em HTTP puro).
+    Encerra o processo se estiverem configuradas mas o par cert/chave for
+    inválido — nunca sobe silenciosamente sem TLS quando HTTPS foi pedido.
+    """
+    if not CERT_PATH and not KEY_PATH:
+        return None
+
+    cert_path = Path(CERT_PATH)
+    key_path  = Path(KEY_PATH)
+
+    if not cert_path.is_file():
+        logger.error(f"CERT_PATH configurado mas arquivo não encontrado: {cert_path}")
+        raise SystemExit(1)
+    if not key_path.is_file():
+        logger.error(f"KEY_PATH configurado mas arquivo não encontrado: {key_path}")
+        raise SystemExit(1)
+
+    contexto = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    try:
+        contexto.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))
+    except ssl.SSLError as e:
+        logger.error(f"Certificado/chave inválidos ({cert_path}, {key_path}): {e}")
+        raise SystemExit(1)
+
+    return contexto
 
 # ── Execução de Scripts ───────────────────────────────────────────────────────
 
@@ -635,6 +669,8 @@ cat "$LOG_FILE"
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    logger.info(f"Monitor iniciando na porta {PORTA}...")
-    logger.info(f"Acesse: http://0.0.0.0:{PORTA}")
-    app.run(host="0.0.0.0", port=PORTA, debug=False)
+    ssl_context = _carregar_ssl_context()
+    esquema = "https" if ssl_context else "http"
+    logger.info(f"Monitor iniciando na porta {PORTA} ({esquema.upper()})...")
+    logger.info(f"Acesse: {esquema}://0.0.0.0:{PORTA}")
+    app.run(host="0.0.0.0", port=PORTA, debug=False, ssl_context=ssl_context)

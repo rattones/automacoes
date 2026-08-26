@@ -15,6 +15,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Histórico persistido em `monitor/data/watchlist_historico.json` (até 20 pontos por alvo), atualizado a cada checagem e removido automaticamente quando o alvo é excluído da watchlist
 - Suporte a porta customizada para alvos HTTP(S) da watchlist (campo opcional no modal de adicionar)
 
+#### 🔒 Monitor Web do Servidor — HTTPS
+- **Monitor agora roda em HTTPS por padrão**: `server.py` aceita `CERT_PATH`/`KEY_PATH` via `.env` e sobe com `ssl_context` do Flask
+- Validação do par certificado/chave na inicialização — se configurados mas inválidos ou ausentes, o servidor encerra o processo em vez de subir sem TLS
+- `setup-monitor.sh` gera automaticamente um certificado self-signed (`openssl`, RSA 2048, válido por 825 dias) em `monitor/data/certs/` na primeira instalação, e retrocompatibiliza instalações antigas sem `CERT_PATH`/`KEY_PATH` no `.env`
+- Deixar `CERT_PATH`/`KEY_PATH` em branco mantém o comportamento anterior (HTTP puro)
+
 ## [1.2.0] - 2026-05-08
 
 ### ✨ Novas Funcionalidades

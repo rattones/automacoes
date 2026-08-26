@@ -477,7 +477,7 @@ Painel web de monitoramento em tempo real, acessível pelo browser, com autentic
 
 ### Acesso
 ```
-http://[IP-do-servidor]:8180
+https://[IP-do-servidor]:8180
 ```
 Login com usuário e senha do sistema operacional.
 
@@ -486,6 +486,18 @@ Login com usuário e senha do sistema operacional.
 bash monitor/setup.sh
 ```
 O script instala dependências Python, cria o serviço systemd e o inicia automaticamente.
+
+### HTTPS
+O monitor roda em HTTPS por padrão. Na primeira instalação, `setup.sh` gera automaticamente
+um certificado TLS self-signed em `monitor/data/certs/` (válido por 825 dias) e configura
+`CERT_PATH`/`KEY_PATH` no `.env`. Como o certificado é self-signed, o navegador exibe um aviso
+de segurança na primeira visita — isso é esperado.
+
+Na inicialização, `server.py` valida que o par certificado/chave existe e pode ser carregado;
+se `CERT_PATH`/`KEY_PATH` estiverem configurados mas inválidos ou ausentes, o servidor **não
+sobe** em modo inseguro — o processo é encerrado com erro no log. Para usar um certificado
+próprio (ex: Let's Encrypt), basta sobrescrever `CERT_PATH`/`KEY_PATH` no `.env` e reiniciar
+o serviço. Deixar ambas as variáveis em branco faz o servidor subir em HTTP puro.
 
 ### Funcionalidades
 

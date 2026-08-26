@@ -13,6 +13,9 @@ VENV_DIR="$MONITOR_DIR/.venv"
 ENV_FILE="$MONITOR_DIR/.env"
 PORTA="${MONITOR_PORTA:-8180}"
 SERVICE_NAME="monitor-servidor"
+CERT_DIR="$MONITOR_DIR/data/certs"
+CERT_FILE="$CERT_DIR/cert.pem"
+KEY_FILE="$CERT_DIR/key.pem"
 
 # Inicializar LOG_FILE se não definido (execução standalone, fora do atualizar_servidor.sh)
 if [ -z "${LOG_FILE:-}" ]; then
@@ -48,6 +51,11 @@ fi
 # libpam0g-dev + python3-dev + gcc (para compilar python-pam)
 if ! dpkg -s libpam0g-dev &>/dev/null 2>&1; then
     PKGS_NECESSARIOS+=(libpam0g-dev python3-dev gcc)
+fi
+
+# openssl (para gerar o certificado TLS self-signed)
+if ! command -v openssl &>/dev/null; then
+    PKGS_NECESSARIOS+=(openssl)
 fi
 
 if [ ${#PKGS_NECESSARIOS[@]} -gt 0 ]; then
@@ -97,11 +105,43 @@ if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" <<EOF
 SECRET_KEY=${SECRET_KEY}
 MONITOR_PORTA=${PORTA}
+CERT_PATH=${CERT_FILE}
+KEY_PATH=${KEY_FILE}
 EOF
     chmod 600 "$ENV_FILE"
     log_sucesso "Arquivo .env criado (permissões 600)"
 else
     log "Arquivo .env já existe, mantendo configuração"
+    # Instalações anteriores ao suporte a HTTPS não têm CERT_PATH/KEY_PATH
+    if ! grep -q '^CERT_PATH=' "$ENV_FILE" 2>/dev/null; then
+        log "Adicionando CERT_PATH/KEY_PATH ao .env existente..."
+        {
+            echo "CERT_PATH=${CERT_FILE}"
+            echo "KEY_PATH=${KEY_FILE}"
+        } >> "$ENV_FILE"
+    fi
+fi
+
+# ── Certificado TLS self-signed (gerado se ainda não existir) ─────────────────
+if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+    log "Gerando certificado TLS self-signed para HTTPS..."
+    mkdir -p "$CERT_DIR"
+    IP_LOCAL=$(hostname -I | awk '{print $1}')
+    if openssl req -x509 -nodes -newkey rsa:2048 \
+        -keyout "$KEY_FILE" -out "$CERT_FILE" \
+        -days 825 \
+        -subj "/CN=$(hostname -f 2>/dev/null || hostname)" \
+        -addext "subjectAltName=DNS:$(hostname),IP:${IP_LOCAL},IP:127.0.0.1" \
+        &>/dev/null; then
+        chmod 600 "$KEY_FILE"
+        chmod 644 "$CERT_FILE"
+        log_sucesso "Certificado self-signed gerado em $CERT_DIR (válido por 825 dias)"
+    else
+        log_erro "Falha ao gerar certificado TLS self-signed"
+        exit 1
+    fi
+else
+    log "Certificado TLS já existe em $CERT_DIR, mantendo"
 fi
 
 # ── Permissões dos scripts ────────────────────────────────────────────────────
@@ -207,7 +247,8 @@ sleep 2  # aguardar inicialização
 if systemctl is-active --quiet "$SERVICE_NAME"; then
     IP_LOCAL=$(hostname -I | awk '{print $1}')
     log_sucesso "Monitor está rodando!"
-    log_sucesso "Acesse em: http://${IP_LOCAL}:${PORTA}"
+    log_sucesso "Acesse em: https://${IP_LOCAL}:${PORTA}"
+    log_aviso "Certificado self-signed: o navegador vai exibir aviso de segurança na primeira visita"
     log "Login com usuário e senha do sistema operacional"
     log ""
     log "Comandos úteis:"
