@@ -11,7 +11,7 @@ import { estado } from '../state.js';
 export async function carregarRede(silencioso = false) {
   if (!silencioso) {
     $('#tbody-interfaces').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
-    $('#tbody-portas').innerHTML     = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
+    $('#tbody-portas').innerHTML     = '<tr><td colspan="7" class="loading-row">Carregando...</td></tr>';
   }
 
   const [dados, dadosWatch] = await Promise.all([
@@ -74,20 +74,62 @@ export async function carregarRede(silencioso = false) {
   aplicarFiltroPortas();
 }
 
+// Mini gráfico (sparkline) em SVG com os últimos N pontos de latência (ms).
+// Pontos `null` (leitura offline) ficam com um marcador na base, sem interpolar a linha.
+function sparklineSvg(pontos) {
+  const W = 70, H = 22, PAD = 2;
+  const validos = (pontos ?? []).filter(v => v != null);
+  if (validos.length < 2) {
+    return '<span class="sparkline-vazio">—</span>';
+  }
+
+  const max = Math.max(...validos);
+  const min = Math.min(...validos);
+  const faixa = max - min || 1;
+  const n = pontos.length;
+  const passo = n > 1 ? (W - PAD * 2) / (n - 1) : 0;
+
+  const coordY = (v) => H - PAD - ((v - min) / faixa) * (H - PAD * 2);
+
+  let pathD = '';
+  let comeco = true;
+  const marcadoresOffline = [];
+  pontos.forEach((v, i) => {
+    const x = PAD + i * passo;
+    if (v == null) {
+      marcadoresOffline.push(`<circle cx="${x.toFixed(1)}" cy="${(H - PAD).toFixed(1)}" r="1.6" class="sparkline-offline-pt"/>`);
+      comeco = true;
+      return;
+    }
+    const y = coordY(v).toFixed(1);
+    pathD += `${comeco ? 'M' : 'L'}${x.toFixed(1)},${y} `;
+    comeco = false;
+  });
+
+  const ultimo = pontos[pontos.length - 1];
+  const corLinha = ultimo == null ? 'var(--vermelho)' : 'var(--verde)';
+
+  return `<svg class="sparkline" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <path d="${pathD.trim()}" fill="none" stroke="${corLinha}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+    ${marcadoresOffline.join('')}
+  </svg>`;
+}
+
 function renderizarPortas(lista) {
   if (lista.length === 0) {
-    $('#tbody-portas').innerHTML = '<tr><td colspan="6" class="loading-row">Nenhum serviço em escuta detectado</td></tr>';
+    $('#tbody-portas').innerHTML = '<tr><td colspan="7" class="loading-row">Nenhum serviço em escuta detectado</td></tr>';
     return;
   }
   $('#tbody-portas').innerHTML = lista.map(s => {
     if (s.origem === 'watch') {
-      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
+      const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : (s.porta ? `${s.url} (:${s.porta})` : s.url);
       const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
       return `<tr>
         <td><code style="font-size:11px">${esc(alvo)}</code></td>
         <td><strong>${esc(s.nome)}</strong></td>
         <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : 'HTTP(S)'}</span></td>
         <td>${esc(s.detalhe ?? '—')}</td>
+        <td>${sparklineSvg(s.historico)}</td>
         <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
         <td><button class="btn btn-ghost-danger btn-xs" onclick="excluirWatchlist('${esc(s.id)}')" title="Remover monitoramento">✕</button></td>
       </tr>`;
@@ -100,6 +142,7 @@ function renderizarPortas(lista) {
       <td>${esc(s.processo)}</td>
       <td>${s.servico ? `<span class="versao-chip">${esc(s.servico)}</span>` : '—'}</td>
       <td>${ipsHtml}</td>
+      <td><span class="sparkline-vazio">—</span></td>
       <td><span class="badge badge-unknown">local</span></td>
       <td></td>
     </tr>`;
@@ -146,6 +189,7 @@ function abrirModalWatchlist() {
   $('#wl-host').value = '';
   $('#wl-porta').value = '';
   $('#wl-url').value = '';
+  $('#wl-porta-http').value = '';
   $('#wl-campos-tcp').classList.remove('hidden');
   $('#wl-campos-http').classList.add('hidden');
   $('#wl-erro').classList.add('hidden');
@@ -194,6 +238,8 @@ $('#wl-confirmar')?.addEventListener('click', async () => {
       erroEl.classList.remove('hidden');
       return;
     }
+    const portaHttp = $('#wl-porta-http').value.trim();
+    if (portaHttp) body.porta = portaHttp;
   }
 
   const r = await api('/api/network/watchlist', { method: 'POST', body });

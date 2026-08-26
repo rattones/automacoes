@@ -499,6 +499,9 @@ O script instala dependências Python, cria o serviço systemd e o inicia automa
 #### Aba Rede
 - Tabela de interfaces (estado, MAC, IPs, velocidade rx/tx em Mbps)
 - Tabela de portas em escuta com filtro por porta/processo/serviço
+- Watchlist de alvos TCP ou HTTP(S) monitorados manualmente (host:porta ou URL), com checagem periódica de status online/offline e latência
+- Mini-gráfico (sparkline) com o histórico das últimas 20 leituras de latência de cada alvo da watchlist; leituras offline aparecem como marcador na base do gráfico
+- Histórico de latência persistido em `monitor/data/watchlist_historico.json`, removido automaticamente quando o alvo é excluído da watchlist
 
 #### Aba Serviços
 - Lista de serviços systemd monitorados com estado, versão e ações (reiniciar, parar, recarregar)

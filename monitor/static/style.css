@@ -477,6 +477,11 @@ html, body {
 
 .loading-row { text-align: center; color: var(--text-muted); padding: 2rem; }
 
+/* ── Sparkline (mini-gráfico de histórico) ─────────────── */
+.sparkline { display: block; }
+.sparkline-offline-pt { fill: var(--vermelho); }
+.sparkline-vazio { color: var(--text-muted); font-size: 12px; }
+
 /* ── Badges de status ──────────────────────────────────── */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;

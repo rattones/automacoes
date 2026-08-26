@@ -110,6 +110,10 @@
         <label for="wl-url">URL</label>
         <input id="wl-url" type="text" placeholder="https://exemplo.com/health" autocomplete="off">
       </div>
+      <div class="field">
+        <label for="wl-porta-http">Porta (opcional)</label>
+        <input id="wl-porta-http" type="number" min="1" max="65535" placeholder="Deixe em branco para usar a porta padrão da URL" autocomplete="off">
+      </div>
     </div>
 
     <div id="wl-erro" class="login-erro hidden"></div>
@@ -316,12 +320,13 @@
               <th>Nome / Processo</th>
               <th>Tipo</th>
               <th>Detalhe</th>
+              <th>Histórico</th>
               <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="tbody-portas">
-            <tr><td colspan="6" class="loading-row">Carregando...</td></tr>
+            <tr><td colspan="7" class="loading-row">Carregando...</td></tr>
           </tbody>
         </table>
       </div>

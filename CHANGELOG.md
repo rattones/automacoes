@@ -5,6 +5,16 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.3.0] - 2026-08-26
+
+### ✨ Novas Funcionalidades
+
+#### 🖥️ Monitor Web do Servidor — Aba Rede
+- **Histórico de latência na watchlist**: nova coluna "Histórico" na tabela de Serviços em Escuta, entre Detalhe e Status, com um mini-gráfico (sparkline) das últimas 20 leituras de latência de cada alvo monitorado (TCP ou HTTP/S)
+- Leituras offline aparecem como marcador na base do gráfico, sem interpolar a linha através da falha
+- Histórico persistido em `monitor/data/watchlist_historico.json` (até 20 pontos por alvo), atualizado a cada checagem e removido automaticamente quando o alvo é excluído da watchlist
+- Suporte a porta customizada para alvos HTTP(S) da watchlist (campo opcional no modal de adicionar)
+
 ## [1.2.0] - 2026-05-08
 
 ### ✨ Novas Funcionalidades

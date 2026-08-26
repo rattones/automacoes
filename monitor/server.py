@@ -13,12 +13,13 @@ import subprocess
 import secrets
 import time
 import logging
+import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from flask import (
@@ -33,6 +34,8 @@ SCRIPTS_DIR = BASE_DIR / "scripts"
 PROJ_DIR   = BASE_DIR.parent  # raiz do projeto automacoes
 DATA_DIR   = BASE_DIR / "data"
 WATCHLIST_PATH = DATA_DIR / "watchlist.json"
+HISTORICO_WATCHLIST_PATH = DATA_DIR / "watchlist_historico.json"
+HISTORICO_MAX_PONTOS = 20
 
 # Carregar .env se existir
 env_file = BASE_DIR / ".env"
@@ -142,6 +145,46 @@ def _salvar_watchlist(itens: list[dict]) -> None:
     WATCHLIST_PATH.write_text(json.dumps(itens, indent=2, ensure_ascii=False))
 
 
+_historico_lock = threading.Lock()
+
+
+def _carregar_historico() -> dict[str, list[float | None]]:
+    try:
+        if HISTORICO_WATCHLIST_PATH.is_file():
+            return json.loads(HISTORICO_WATCHLIST_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error(f"Erro ao ler histórico da watchlist: {e}")
+    return {}
+
+
+def _salvar_historico(historico: dict[str, list[float | None]]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    HISTORICO_WATCHLIST_PATH.write_text(json.dumps(historico, ensure_ascii=False))
+
+
+def _registrar_historico(item_id: str, ms: float | None) -> list[float | None]:
+    """Acrescenta uma leitura ao histórico do item (mantendo os últimos N) e persiste."""
+    with _historico_lock:
+        historico = _carregar_historico()
+        pontos = historico.get(item_id, [])
+        pontos.append(ms)
+        pontos = pontos[-HISTORICO_MAX_PONTOS:]
+        historico[item_id] = pontos
+        _salvar_historico(historico)
+        return pontos
+
+
+def _remover_historico(item_ids: list[str]) -> None:
+    with _historico_lock:
+        historico = _carregar_historico()
+        alterado = False
+        for item_id in item_ids:
+            if historico.pop(item_id, None) is not None:
+                alterado = True
+        if alterado:
+            _salvar_historico(historico)
+
+
 def _checar_alvo(item: dict) -> dict:
     """Testa alcançabilidade de um alvo TCP ou HTTP(S). Nunca lança exceção."""
     inicio = time.monotonic()
@@ -150,19 +193,36 @@ def _checar_alvo(item: dict) -> dict:
             with socket.create_connection((item["host"], item["porta"]), timeout=3):
                 pass
             ms = round((time.monotonic() - inicio) * 1000)
-            return {"online": True, "detalhe": f"{ms} ms"}
+            historico = _registrar_historico(item["id"], ms)
+            return {"online": True, "detalhe": f"{ms} ms", "historico": historico}
 
-        req = Request(item["url"], method="GET", headers={"User-Agent": "monitor-web"})
+        url = item["url"]
+        porta = item.get("porta")
+        if porta:
+            partes = urlparse(url)
+            host = partes.hostname or ""
+            netloc = f"{host}:{porta}"
+            if partes.username:
+                userinfo = partes.username + (f":{partes.password}" if partes.password else "")
+                netloc = f"{userinfo}@{netloc}"
+            url = urlunparse(partes._replace(netloc=netloc))
+
+        req = Request(url, method="GET", headers={"User-Agent": "monitor-web"})
         with urlopen(req, timeout=5) as resp:
             codigo = resp.status
         ms = round((time.monotonic() - inicio) * 1000)
-        return {"online": codigo < 400, "detalhe": f"HTTP {codigo} — {ms} ms"}
+        online = codigo < 400
+        historico = _registrar_historico(item["id"], ms if online else None)
+        return {"online": online, "detalhe": f"HTTP {codigo} — {ms} ms", "historico": historico}
     except HTTPError as e:
-        return {"online": e.code < 500, "detalhe": f"HTTP {e.code}"}
+        historico = _registrar_historico(item["id"], None)
+        return {"online": e.code < 500, "detalhe": f"HTTP {e.code}", "historico": historico}
     except URLError as e:
-        return {"online": False, "detalhe": str(e.reason)}
+        historico = _registrar_historico(item["id"], None)
+        return {"online": False, "detalhe": str(e.reason), "historico": historico}
     except OSError as e:
-        return {"online": False, "detalhe": str(e)}
+        historico = _registrar_historico(item["id"], None)
+        return {"online": False, "detalhe": str(e), "historico": historico}
 
 # ── Execução de Scripts ───────────────────────────────────────────────────────
 
@@ -415,6 +475,16 @@ def api_watchlist_add():
             return jsonify({"success": False, "erro": "URL inválida. Use http:// ou https://"}), 400
         item["url"] = url
 
+        porta_raw = dados.get("porta")
+        if porta_raw not in (None, ""):
+            try:
+                porta = int(porta_raw)
+            except (TypeError, ValueError):
+                return jsonify({"success": False, "erro": "Porta inválida."}), 400
+            if not (1 <= porta <= 65535):
+                return jsonify({"success": False, "erro": "Porta deve estar entre 1 e 65535."}), 400
+            item["porta"] = porta
+
     itens = _carregar_watchlist()
     itens.append(item)
     _salvar_watchlist(itens)
@@ -430,6 +500,7 @@ def api_watchlist_delete(item_id):
     if len(novos) == len(itens):
         return jsonify({"success": False, "erro": "Item não encontrado."}), 404
     _salvar_watchlist(novos)
+    _remover_historico([item_id])
     return jsonify({"success": True})
 
 
