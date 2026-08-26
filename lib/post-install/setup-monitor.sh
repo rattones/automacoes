@@ -127,11 +127,15 @@ if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
     log "Gerando certificado TLS self-signed para HTTPS..."
     mkdir -p "$CERT_DIR"
     IP_LOCAL=$(hostname -I | awk '{print $1}')
+    HOSTNAME_CURTO=$(hostname)
+    # Inclui o nome mDNS (.local) além do hostname puro, para cobrir acesso
+    # via "hostname.local" (Avahi/Bonjour), comum em rede doméstica.
+    SAN="DNS:${HOSTNAME_CURTO},DNS:${HOSTNAME_CURTO}.local,IP:${IP_LOCAL},IP:127.0.0.1"
     if openssl req -x509 -nodes -newkey rsa:2048 \
         -keyout "$KEY_FILE" -out "$CERT_FILE" \
         -days 825 \
-        -subj "/CN=$(hostname -f 2>/dev/null || hostname)" \
-        -addext "subjectAltName=DNS:$(hostname),IP:${IP_LOCAL},IP:127.0.0.1" \
+        -subj "/CN=${HOSTNAME_CURTO}" \
+        -addext "subjectAltName=${SAN}" \
         &>/dev/null; then
         chmod 600 "$KEY_FILE"
         chmod 644 "$CERT_FILE"
