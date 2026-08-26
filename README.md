@@ -488,16 +488,34 @@ bash monitor/setup.sh
 O script instala dependências Python, cria o serviço systemd e o inicia automaticamente.
 
 ### HTTPS
-O monitor roda em HTTPS por padrão. Na primeira instalação, `setup.sh` gera automaticamente
-um certificado TLS self-signed em `monitor/data/certs/` (válido por 825 dias) e configura
-`CERT_PATH`/`KEY_PATH` no `.env`. Como o certificado é self-signed, o navegador exibe um aviso
-de segurança na primeira visita — isso é esperado.
+O monitor roda em HTTPS por padrão, usando uma **CA (autoridade certificadora) local
+própria** em vez de um certificado self-signed solto:
 
-Na inicialização, `server.py` valida que o par certificado/chave existe e pode ser carregado;
-se `CERT_PATH`/`KEY_PATH` estiverem configurados mas inválidos ou ausentes, o servidor **não
-sobe** em modo inseguro — o processo é encerrado com erro no log. Para usar um certificado
-próprio (ex: Let's Encrypt), basta sobrescrever `CERT_PATH`/`KEY_PATH` no `.env` e reiniciar
-o serviço. Deixar ambas as variáveis em branco faz o servidor subir em HTTP puro.
+1. Na primeira instalação, `setup.sh` gera uma CA local em `monitor/data/ca/` (válida por
+   10 anos) e usa-a para emitir o certificado do servidor em `monitor/data/certs/` (válido
+   por 825 dias, com SAN cobrindo hostname, `hostname.local` e IP da máquina)
+2. `CERT_PATH`/`KEY_PATH` são configurados automaticamente no `.env`
+3. Reinstalações reemitem o certificado do servidor automaticamente se o hostname/IP mudar,
+   sem gerar uma nova CA
+
+**Para o navegador parar de exibir aviso de segurança**, instale o certificado da CA
+(`monitor/data/ca/ca.pem` — nunca a chave `ca-key.pem`) como "Autoridade Certificadora Raiz
+confiável" em cada dispositivo que acessa o painel (uma vez por dispositivo):
+- **Windows**: duplo-clique no `.pem` → Instalar Certificado → Máquina Local → Autoridades
+  de Certificação Raiz Confiáveis
+- **macOS**: abra no Keychain Access → adicione ao chaveiro "Sistema" → defina como
+  "Sempre Confiar"
+- **Linux (navegadores baseados em NSS/Chrome)**: `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "Monitor CA" -i ca.pem`
+- **Android**: Configurações → Segurança → Credenciais → Instalar certificado → CA
+- **iOS**: envie o arquivo por e-mail/AirDrop, instale o perfil e depois ative confiança
+  total em Ajustes → Geral → Sobre → Confiança de Certificado
+
+Na inicialização, `server.py` valida que o par certificado/chave existe e pode ser
+carregado; se `CERT_PATH`/`KEY_PATH` estiverem configurados mas inválidos ou ausentes, o
+servidor **não sobe** em modo inseguro — o processo é encerrado com erro no log. Para usar
+um certificado de terceiros (ex: Let's Encrypt) em vez da CA local, basta sobrescrever
+`CERT_PATH`/`KEY_PATH` no `.env` e reiniciar o serviço. Deixar ambas as variáveis em branco
+faz o servidor subir em HTTP puro.
 
 ### Funcionalidades
 

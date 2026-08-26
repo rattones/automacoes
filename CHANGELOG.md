@@ -18,7 +18,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 #### 🔒 Monitor Web do Servidor — HTTPS
 - **Monitor agora roda em HTTPS por padrão**: `server.py` aceita `CERT_PATH`/`KEY_PATH` via `.env` e sobe com `ssl_context` do Flask
 - Validação do par certificado/chave na inicialização — se configurados mas inválidos ou ausentes, o servidor encerra o processo em vez de subir sem TLS
-- `setup-monitor.sh` gera automaticamente um certificado self-signed (`openssl`, RSA 2048, válido por 825 dias) em `monitor/data/certs/` na primeira instalação, e retrocompatibiliza instalações antigas sem `CERT_PATH`/`KEY_PATH` no `.env`
+- **CA local própria**: `setup-monitor.sh` gera uma CA (autoridade certificadora) local em `monitor/data/ca/` (RSA 4096, válida por 10 anos) e emite o certificado do servidor assinado por ela em `monitor/data/certs/` (RSA 2048, válido por 825 dias), com SAN cobrindo hostname, `hostname.local` (mDNS) e IP da máquina — instalar `ca.pem` como confiável no dispositivo elimina o aviso de segurança do navegador, diferente de um self-signed solto
+- Reinstalações reemitem automaticamente o certificado do servidor se hostname/IP mudarem, sem gerar uma nova CA; instalações anteriores (self-signed sem CA) são migradas automaticamente
 - Deixar `CERT_PATH`/`KEY_PATH` em branco mantém o comportamento anterior (HTTP puro)
 
 ## [1.2.0] - 2026-05-08

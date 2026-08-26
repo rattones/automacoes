@@ -16,6 +16,9 @@ SERVICE_NAME="monitor-servidor"
 CERT_DIR="$MONITOR_DIR/data/certs"
 CERT_FILE="$CERT_DIR/cert.pem"
 KEY_FILE="$CERT_DIR/key.pem"
+CA_DIR="$MONITOR_DIR/data/ca"
+CA_KEY_FILE="$CA_DIR/ca-key.pem"
+CA_CERT_FILE="$CA_DIR/ca.pem"
 
 # Inicializar LOG_FILE se não definido (execução standalone, fora do atualizar_servidor.sh)
 if [ -z "${LOG_FILE:-}" ]; then
@@ -122,30 +125,84 @@ else
     fi
 fi
 
-# ── Certificado TLS self-signed (gerado se ainda não existir) ─────────────────
-if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
-    log "Gerando certificado TLS self-signed para HTTPS..."
-    mkdir -p "$CERT_DIR"
-    IP_LOCAL=$(hostname -I | awk '{print $1}')
-    HOSTNAME_CURTO=$(hostname)
-    # Inclui o nome mDNS (.local) além do hostname puro, para cobrir acesso
-    # via "hostname.local" (Avahi/Bonjour), comum em rede doméstica.
-    SAN="DNS:${HOSTNAME_CURTO},DNS:${HOSTNAME_CURTO}.local,IP:${IP_LOCAL},IP:127.0.0.1"
-    if openssl req -x509 -nodes -newkey rsa:2048 \
-        -keyout "$KEY_FILE" -out "$CERT_FILE" \
-        -days 825 \
-        -subj "/CN=${HOSTNAME_CURTO}" \
-        -addext "subjectAltName=${SAN}" \
+# ── CA local (gerada uma única vez, raiz de confiança do painel) ──────────────
+# Em vez de um certificado self-signed "solto" (que o navegador nunca confia),
+# criamos uma CA local própria e assinamos o certificado do servidor com ela.
+# O certificado da CA (ca.pem, sem a chave privada) pode ser instalado como
+# confiável nos dispositivos que acessam o painel — depois disso, a conexão
+# HTTPS passa a ser validada normalmente, sem aviso de segurança.
+if [ ! -f "$CA_KEY_FILE" ] || [ ! -f "$CA_CERT_FILE" ]; then
+    log "Gerando CA local para assinatura de certificados do monitor..."
+    mkdir -p "$CA_DIR"
+    if openssl req -x509 -nodes -newkey rsa:4096 \
+        -keyout "$CA_KEY_FILE" -out "$CA_CERT_FILE" \
+        -days 3650 \
+        -subj "/CN=Monitor Servidor CA - $(hostname)" \
+        -addext "basicConstraints=critical,CA:TRUE" \
+        -addext "keyUsage=critical,keyCertSign,cRLSign" \
         &>/dev/null; then
-        chmod 600 "$KEY_FILE"
-        chmod 644 "$CERT_FILE"
-        log_sucesso "Certificado self-signed gerado em $CERT_DIR (válido por 825 dias)"
+        chmod 600 "$CA_KEY_FILE"
+        chmod 644 "$CA_CERT_FILE"
+        log_sucesso "CA local gerada em $CA_DIR (válida por 10 anos)"
     else
-        log_erro "Falha ao gerar certificado TLS self-signed"
+        log_erro "Falha ao gerar CA local"
         exit 1
     fi
 else
-    log "Certificado TLS já existe em $CERT_DIR, mantendo"
+    log "CA local já existe em $CA_DIR, mantendo"
+fi
+
+# ── Certificado do servidor (assinado pela CA local) ──────────────────────────
+# Regenerado sempre que IP ou hostname mudarem em relação ao certificado atual,
+# para manter o SAN correto; caso contrário mantido (evita reemitir à toa).
+IP_LOCAL=$(hostname -I | awk '{print $1}')
+HOSTNAME_CURTO=$(hostname)
+SAN="DNS:${HOSTNAME_CURTO},DNS:${HOSTNAME_CURTO}.local,IP:${IP_LOCAL},IP:127.0.0.1"
+
+CERT_ATUALIZADO=true
+if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
+    SAN_ATUAL=$(openssl x509 -in "$CERT_FILE" -noout -ext subjectAltName 2>/dev/null | tail -n +2 | tr -d ' \n' | sed 's/IPAddress:/IP:/g')
+    SAN_ESPERADO=$(echo "$SAN" | tr -d ' ')
+    # Além do SAN bater, o certificado precisa ter sido assinado pela CA local
+    # (instalações anteriores ao suporte a CA tinham um self-signed "solto").
+    if [ "$SAN_ATUAL" = "$SAN_ESPERADO" ] && openssl verify -CAfile "$CA_CERT_FILE" "$CERT_FILE" &>/dev/null; then
+        CERT_ATUALIZADO=false
+    fi
+fi
+
+if [ "$CERT_ATUALIZADO" = true ]; then
+    log "Gerando certificado do monitor assinado pela CA local..."
+    mkdir -p "$CERT_DIR"
+    CSR_FILE=$(mktemp)
+    EXT_FILE=$(mktemp)
+    cat > "$EXT_FILE" <<EOF
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=${SAN}
+EOF
+    if openssl req -nodes -newkey rsa:2048 \
+        -keyout "$KEY_FILE" -out "$CSR_FILE" \
+        -subj "/CN=${HOSTNAME_CURTO}" \
+        &>/dev/null \
+    && openssl x509 -req \
+        -in "$CSR_FILE" \
+        -CA "$CA_CERT_FILE" -CAkey "$CA_KEY_FILE" -CAcreateserial \
+        -out "$CERT_FILE" \
+        -days 825 \
+        -extfile "$EXT_FILE" \
+        &>/dev/null; then
+        chmod 600 "$KEY_FILE"
+        chmod 644 "$CERT_FILE"
+        log_sucesso "Certificado do monitor emitido pela CA local em $CERT_DIR (válido por 825 dias)"
+    else
+        log_erro "Falha ao emitir certificado do monitor"
+        rm -f "$CSR_FILE" "$EXT_FILE"
+        exit 1
+    fi
+    rm -f "$CSR_FILE" "$EXT_FILE"
+else
+    log "Certificado do monitor já cobre o hostname/IP atual, mantendo"
 fi
 
 # ── Permissões dos scripts ────────────────────────────────────────────────────
@@ -252,7 +309,10 @@ if systemctl is-active --quiet "$SERVICE_NAME"; then
     IP_LOCAL=$(hostname -I | awk '{print $1}')
     log_sucesso "Monitor está rodando!"
     log_sucesso "Acesse em: https://${IP_LOCAL}:${PORTA}"
-    log_aviso "Certificado self-signed: o navegador vai exibir aviso de segurança na primeira visita"
+    log_aviso "O navegador vai exibir aviso de segurança até você instalar a CA local como confiável:"
+    log_indent "Certificado da CA: ${CA_CERT_FILE}"
+    log_indent "Instale-o como 'Autoridade Certificadora Raiz confiável' em cada dispositivo que acessar o painel"
+    log_indent "(a CA nunca sai do servidor — copie apenas o arquivo .pem, nunca a chave privada)"
     log "Login com usuário e senha do sistema operacional"
     log ""
     log "Comandos úteis:"
