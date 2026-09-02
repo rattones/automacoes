@@ -12,4 +12,6 @@ export const estado = {
   dadosRede: null,  // Cache para evitar recalcular rx/tx
   _servicosPorta: [], // Cache da watchlist (serviços monitorados manualmente) para o filtro
   _portasAuto: [],    // Cache das portas detectadas automaticamente (não monitoradas) para o filtro
+  _logPagina: 1,      // Página atual da aba Logs
+  _logTotalPaginas: 1,
 };

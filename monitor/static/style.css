@@ -621,6 +621,23 @@ html, body {
   border-radius: 4px; padding: 1px 6px;
 }
 
+/* ── Aba Logs ──────────────────────────────────────────── */
+.paginacao {
+  display: flex; align-items: center; gap: 1rem;
+  justify-content: center; margin: 1rem 0;
+}
+.paginacao span { font-size: 12px; color: var(--text-muted); }
+.paginacao .btn:disabled { opacity: .4; cursor: default; }
+
+.log-linha { cursor: pointer; }
+.log-linha.ativa td { background: var(--bg-card2); }
+
+#log-detalhe-conteudo .log-nivel-erro    { color: var(--vermelho); }
+#log-detalhe-conteudo .log-nivel-sucesso { color: var(--verde); }
+#log-detalhe-conteudo .log-nivel-aviso   { color: var(--amarelo); }
+#log-detalhe-conteudo .log-nivel-info    { color: var(--azul); }
+#log-detalhe-conteudo .log-nivel-normal  { color: var(--text); }
+
 /* ── Responsivo ────────────────────────────────────────── */
 @media (max-width: 640px) {
   .main-content { padding: 1rem; }

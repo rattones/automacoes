@@ -5,6 +5,16 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### ✨ Novas Funcionalidades
+
+#### 🖥️ Monitor Web do Servidor — Aba Logs
+- **Nova aba "Logs"**: lista os arquivos `.log` de execução em `logs/` (atualizações do servidor, atualizações de container e setup do monitor), ordenados do mais recente para o mais antigo
+- Paginação de 10 em 10 no backend (`GET /api/logs?page=N`), com botões Anterior/Próxima
+- Selecionar um log abre um painel abaixo da tabela (`GET /api/logs/<nome>`) com o conteúdo, códigos ANSI removidos e destaque de cor por nível (ERRO/SUCESSO/AVISO/INFO/PROGRESSO), reaproveitando a classificação por prefixo de `lib/converter_log_md.sh`
+- Leitura limitada a 5000 linhas / 2 MB por log (indicado como "truncado"); nome do arquivo validado contra path traversal
+
 ## [1.3.0] - 2026-08-26
 
 ### ✨ Novas Funcionalidades

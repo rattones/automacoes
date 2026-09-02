@@ -12,6 +12,7 @@ import { carregarStatus } from './tabs/metricas.js';
 import { carregarRede, atualizarWatchlistSilencioso } from './tabs/rede.js';
 import { carregarServicos } from './tabs/servicos.js';
 import { carregarContainers } from './tabs/containers.js';
+import { carregarLogs } from './tabs/logs.js';
 
 const REFRESH_INTERVALO_MS = 5000; // 5 segundos
 
@@ -93,6 +94,7 @@ inicializarTabs({
   rede: carregarRede,
   servicos: carregarServicos,
   containers: carregarContainers,
+  logs: carregarLogs,
 });
 
 // ── Refresh manual ────────────────────────────────────────────────────────────
@@ -111,6 +113,7 @@ function iniciarMonitoramento() {
   if (estado.tabAtiva === 'rede')       carregarRede();
   if (estado.tabAtiva === 'servicos')   carregarServicos();
   if (estado.tabAtiva === 'containers') carregarContainers();
+  if (estado.tabAtiva === 'logs')       carregarLogs();
 
   // Métricas: refresh a cada 5s
   estado.timers.status = setInterval(() => {

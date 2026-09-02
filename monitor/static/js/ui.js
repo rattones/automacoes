@@ -90,6 +90,7 @@ export function inicializarTabs(carregadores) {
       if (tab.dataset.tab === 'rede')       carregadores.rede();
       if (tab.dataset.tab === 'servicos')   carregadores.servicos();
       if (tab.dataset.tab === 'containers') carregadores.containers();
+      if (tab.dataset.tab === 'logs')       carregadores.logs();
     });
   });
 }

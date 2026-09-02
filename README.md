@@ -541,6 +541,12 @@ faz o servidor subir em HTTP puro.
 - Lista de containers Docker com estado e ações (start, stop, restart)
 - Atualização de imagem via `docker pull` + `compose up`
 
+#### Aba Logs
+- Lista dos arquivos `.log` de execução em `logs/` (atualizações do servidor, atualizações de container, setup do monitor), do mais recente para o mais antigo, com tipo, tamanho e data
+- Paginação de 10 em 10 no backend (`GET /api/logs?page=N`)
+- Selecionar um log abre um painel com o conteúdo (`GET /api/logs/<nome>`), com códigos ANSI removidos e destaque de cor por nível (ERRO, SUCESSO, AVISO, INFO, PROGRESSO)
+- Leitura limitada a 5000 linhas / 2 MB por log; nome do arquivo validado contra path traversal
+
 #### Header
 | Botão | Cor | Ação |
 |-------|-----|------|

@@ -38,6 +38,11 @@ WATCHLIST_PATH = DATA_DIR / "watchlist.json"
 HISTORICO_WATCHLIST_PATH = DATA_DIR / "watchlist_historico.json"
 HISTORICO_MAX_PONTOS = 20
 
+LOGS_DIR = PROJ_DIR / "logs"
+LOGS_POR_PAGINA = 10
+LOG_MAX_LINHAS = 5000          # teto de segurança ao ler um log
+LOG_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
+
 # Carregar .env se existir
 env_file = BASE_DIR / ".env"
 if env_file.is_file():
@@ -122,6 +127,9 @@ RE_CONTAINER = re.compile(r'^[a-zA-Z0-9_.\-]+$')
 RE_ACTION    = re.compile(r'^(start|stop|restart|reload)$')
 RE_USERNAME  = re.compile(r'^[a-z_][a-z0-9_\-]{0,31}$')
 RE_HOST      = re.compile(r'^[a-zA-Z0-9_.\-]+$')
+RE_LOG_NOME  = re.compile(r'^[a-zA-Z0-9_.\-]+\.log$')  # anti path traversal
+
+RE_ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 ACOES_CONTAINER = {"start", "stop", "restart"}
 ACOES_SERVICO   = {"start", "stop", "restart", "reload"}
@@ -536,6 +544,110 @@ def api_watchlist_delete(item_id):
     _salvar_watchlist(novos)
     _remover_historico([item_id])
     return jsonify({"success": True})
+
+
+# ── Logs de execução (arquivos .log gerados pelos scripts de automação) ──────
+
+_TIPOS_LOG = {
+    "atualizacao":    "Atualização do servidor",
+    "monitor_update": "Atualização de container",
+    "setup_monitor":  "Setup do monitor",
+}
+
+
+def _tipo_log(nome: str) -> str:
+    for prefixo, rotulo in _TIPOS_LOG.items():
+        if nome.startswith(prefixo):
+            return rotulo
+    return "Outro"
+
+
+def _classificar_linha(texto: str) -> str:
+    """Espelha process_line() de lib/converter_log_md.sh: nível pelo prefixo."""
+    if texto.startswith("[ERRO]"):
+        return "erro"
+    if texto.startswith("[SUCESSO]"):
+        return "sucesso"
+    if texto.startswith("[AVISO]"):
+        return "aviso"
+    if texto.startswith("[INFO]") or texto.startswith("[PROGRESSO]"):
+        return "info"
+    return "normal"
+
+
+@app.route("/api/logs")
+@login_required
+def api_logs():
+    try:
+        pagina = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+
+    arquivos = []
+    if LOGS_DIR.is_dir():
+        for caminho in LOGS_DIR.glob("*.log"):
+            if not caminho.is_file():
+                continue
+            try:
+                st = caminho.stat()
+            except OSError:
+                continue
+            arquivos.append({
+                "nome": caminho.name,
+                "tamanho": st.st_size,
+                "modificado": st.st_mtime,
+                "tipo": _tipo_log(caminho.name),
+            })
+
+    arquivos.sort(key=lambda x: x["modificado"], reverse=True)
+
+    total = len(arquivos)
+    total_paginas = max(1, (total + LOGS_POR_PAGINA - 1) // LOGS_POR_PAGINA)
+    inicio = (pagina - 1) * LOGS_POR_PAGINA
+    fatia = arquivos[inicio:inicio + LOGS_POR_PAGINA]
+
+    return jsonify({
+        "logs": fatia,
+        "pagina": pagina,
+        "total_paginas": total_paginas,
+        "total": total,
+    })
+
+
+@app.route("/api/logs/<nome>")
+@login_required
+def api_log_detalhe(nome):
+    if not RE_LOG_NOME.match(nome):
+        return jsonify({"erro": "Nome de log inválido"}), 400
+
+    caminho = (LOGS_DIR / nome).resolve()
+    if caminho.parent != LOGS_DIR.resolve() or not caminho.is_file():
+        return jsonify({"erro": "Log não encontrado"}), 404
+
+    try:
+        st = caminho.stat()
+        truncado = False
+        linhas = []
+        with caminho.open("r", encoding="utf-8", errors="replace") as fh:
+            bytes_lidos = 0
+            for bruta in fh:
+                bytes_lidos += len(bruta.encode("utf-8", errors="replace"))
+                texto = RE_ANSI.sub("", bruta.rstrip("\n"))
+                linhas.append({"texto": texto, "nivel": _classificar_linha(texto)})
+                if len(linhas) >= LOG_MAX_LINHAS or bytes_lidos >= LOG_MAX_BYTES:
+                    truncado = True
+                    break
+    except OSError as e:
+        logger.error(f"Erro ao ler log {nome}: {e}")
+        return jsonify({"erro": "Erro ao ler o log"}), 500
+
+    return jsonify({
+        "nome": nome,
+        "tamanho": st.st_size,
+        "modificado": st.st_mtime,
+        "truncado": truncado,
+        "linhas": linhas,
+    })
 
 
 @app.route("/api/services")

@@ -181,6 +181,7 @@
       <button class="tab" data-tab="rede">Rede</button>
       <button class="tab" data-tab="servicos">Serviços</button>
       <button class="tab" data-tab="containers">Containers</button>
+      <button class="tab" data-tab="logs">Logs</button>
     </nav>
   </div>
 
@@ -436,6 +437,46 @@
           <button class="btn btn-ghost btn-xs" id="btn-fechar-output">✕</button>
         </div>
         <pre id="output-texto"></pre>
+      </div>
+
+    </section>
+
+    <!-- ══ SEÇÃO: LOGS ══ -->
+    <section id="tab-logs" class="tab-content hidden">
+
+      <div class="section-header">
+        <h2>Logs de Execução</h2>
+        <button class="btn btn-ghost btn-sm" id="btn-refresh-logs">Atualizar</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="tabela-logs">
+          <thead>
+            <tr>
+              <th>Arquivo</th>
+              <th>Tipo</th>
+              <th>Tamanho</th>
+              <th>Modificado</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-logs">
+            <tr><td colspan="4" class="loading-row">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="paginacao" id="paginacao-logs">
+        <button class="btn btn-ghost btn-sm" id="log-pag-anterior">← Anterior</button>
+        <span id="log-pag-info">Página 1</span>
+        <button class="btn btn-ghost btn-sm" id="log-pag-proxima">Próxima →</button>
+      </div>
+
+      <div id="log-detalhe" class="output-box hidden">
+        <div class="output-header">
+          <span id="log-detalhe-titulo">Detalhes</span>
+          <button class="btn btn-ghost btn-xs" id="btn-fechar-log-detalhe">✕</button>
+        </div>
+        <pre id="log-detalhe-conteudo"></pre>
       </div>
 
     </section>
