@@ -129,6 +129,7 @@ html, body {
 .field-hint code { font-size: 10px; }
 .field-check label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
 .field-check input { width: auto; margin: 0; }
+.wl-sugestao { display: inline-block; margin-top: 3px; font-size: 11px; color: var(--amarelo); line-height: 1.35; }
 
 .field select {
   width: 100%; padding: 8px 12px;

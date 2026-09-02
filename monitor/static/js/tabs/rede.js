@@ -131,11 +131,14 @@ function renderizarPortas(lista) {
   $('#tbody-portas').innerHTML = lista.map(s => {
     const alvo = alvoDoServico(s);
     const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
+    const detalhe = s.sugestao
+      ? `${esc(s.detalhe ?? '—')}<br><small class="wl-sugestao" title="${esc(s.sugestao)}">⚠ ${esc(s.sugestao)}</small>`
+      : esc(s.detalhe ?? '—');
     return `<tr>
       <td><code style="font-size:11px">${esc(alvo)}</code></td>
       <td><strong>${esc(s.nome)}</strong></td>
       <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : (s.https === false ? 'HTTP' : 'HTTPS')}</span></td>
-      <td>${esc(s.detalhe ?? '—')}</td>
+      <td>${detalhe}</td>
       <td>${sparklineSvg(s.historico)}</td>
       <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
       <td><button class="btn btn-ghost-danger btn-xs" onclick="excluirWatchlist('${esc(s.id)}')" title="Remover monitoramento">✕</button></td>
@@ -273,7 +276,9 @@ $('#wl-confirmar')?.addEventListener('click', async () => {
   const r = await api('/api/network/watchlist', { method: 'POST', body });
   if (r?.success) {
     $('#watchlist-modal').classList.add('hidden');
-    if (r.item && r.item.online === false) {
+    if (r.item && r.item.sugestao) {
+      toast(`"${nome}" adicionado. ${r.item.sugestao}`, 'aviso', 7000);
+    } else if (r.item && r.item.online === false) {
       toast(`"${nome}" adicionado, mas está offline: ${r.item.detalhe ?? '—'}`, 'aviso');
     } else {
       toast(`"${nome}" adicionado ao monitoramento`, 'ok');

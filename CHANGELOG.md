@@ -20,6 +20,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Coluna "Alvo" com formato uniforme**: alvos HTTP(S) agora aparecem como `host:porta` (ex: `casa-ratton.local:8443`), igual aos alvos TCP, em vez da URL completa com sufixo `(:porta)`
 - **Coluna "Detalhe" com formato uniforme**: online mostra `HTTP 200 · 45 ms` (HTTP/S) ou `TCP · 12 ms` (TCP), com o mesmo separador `·`; offline traduz as mensagens de erro mais comuns de socket/DNS/TLS para português ("Conexão recusada", "Host não encontrado (DNS)", "Tempo esgotado", "A porta não responde HTTPS", etc.)
 - Ao adicionar um alvo que já está offline, o toast avisa ("adicionado, mas está offline: ...") em vez de dar como sucesso silencioso
+- **Sugestão de tipo errado**: quando um alvo HTTP(S) falha o handshake TLS (porta não fala HTTPS) mas a porta aceita conexão TCP, o sistema testa isso automaticamente e sugere trocar o tipo para "TCP" — na coluna Detalhe e no toast ao adicionar
 - Coluna "Tipo" passa a exibir `HTTPS` ou `HTTP` (antes era sempre `HTTP(S)`)
 
 ### ✨ Novas Funcionalidades

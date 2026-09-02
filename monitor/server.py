@@ -258,14 +258,55 @@ def _motivo_erro(err: object) -> str:
         "timed out": "Tempo esgotado",
         "Connection reset by peer": "Conexão encerrada pelo host",
         "Network is unreachable": "Rede inacessível",
-        "WRONG_VERSION_NUMBER": "A porta não responde HTTPS (use o tipo TCP?)",
-        "UNKNOWN_PROTOCOL": "A porta não responde HTTPS (use o tipo TCP?)",
-        "record layer failure": "A porta não responde HTTPS (use o tipo TCP?)",
+        "WRONG_VERSION_NUMBER": "A porta não responde HTTPS",
+        "UNKNOWN_PROTOCOL": "A porta não responde HTTPS",
+        "record layer failure": "A porta não responde HTTPS",
     }
     for chave, traducao in conhecidas.items():
         if chave in texto:
             return traducao
     return texto or "Falha desconhecida"
+
+
+# Erros de handshake TLS que indicam "a porta existe, mas não fala HTTPS"
+# (ex.: apontar HTTPS para porta SSH, MySQL, HTTP puro, etc.).
+_ERROS_NAO_TLS = ("WRONG_VERSION_NUMBER", "UNKNOWN_PROTOCOL", "record layer failure")
+
+
+def _porta_do_alvo(item: dict) -> int | None:
+    """Porta efetiva de um alvo HTTP(S): explícita, ou a padrão do esquema."""
+    porta = item.get("porta")
+    if porta:
+        return int(porta)
+    if "url" in item:
+        p = urlparse(item["url"])
+        return p.port or (443 if p.scheme == "https" else 80)
+    return 443 if item.get("https", True) else 80
+
+
+def _tcp_responde(host: str, porta: int) -> bool:
+    try:
+        with socket.create_connection((host, porta), timeout=3):
+            return True
+    except OSError:
+        return False
+
+
+def _sugestao_tipo(item: dict, motivo: str) -> str | None:
+    """Se o alvo HTTP(S) falhou de um jeito que indica tipo errado e a porta
+    responde a TCP puro, sugere trocar o tipo. Retorna None se não há sugestão.
+    """
+    if item["tipo"] != "http":
+        return None
+    if not any(marca in motivo for marca in _ERROS_NAO_TLS):
+        return None
+    porta = _porta_do_alvo(item)
+    if porta and _tcp_responde(item.get("host") or urlparse(item.get("url", "")).hostname or "", porta):
+        return (
+            f"A porta {porta} aceita conexão TCP mas não responde HTTPS. "
+            f'Troque o tipo deste alvo para "TCP" (verifica só se a porta está aberta).'
+        )
+    return None
 
 
 def _checar_alvo(item: dict) -> dict:
@@ -299,12 +340,18 @@ def _checar_alvo(item: dict) -> dict:
     except HTTPError as e:
         historico = _registrar_historico(item["id"], None)
         return {"online": e.code < 500, "detalhe": f"HTTP {e.code}", "historico": historico}
-    except URLError as e:
+    except (URLError, OSError) as e:
+        raw = str(getattr(e, "reason", None) or e)
         historico = _registrar_historico(item["id"], None)
-        return {"online": False, "detalhe": _motivo_erro(e.reason), "historico": historico}
-    except OSError as e:
-        historico = _registrar_historico(item["id"], None)
-        return {"online": False, "detalhe": _motivo_erro(e), "historico": historico}
+        resultado = {
+            "online": False,
+            "detalhe": _motivo_erro(getattr(e, "reason", None) or e),
+            "historico": historico,
+        }
+        sugestao = _sugestao_tipo(item, raw)
+        if sugestao:
+            resultado["sugestao"] = sugestao
+        return resultado
 
 # ── TLS / HTTPS ────────────────────────────────────────────────────────────────
 
