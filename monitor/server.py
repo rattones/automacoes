@@ -196,6 +196,57 @@ def _remover_historico(item_ids: list[str]) -> None:
             _salvar_historico(historico)
 
 
+def _url_do_alvo(item: dict) -> str:
+    """Monta a URL de um alvo HTTP(S).
+
+    Itens novos guardam host/https/caminho/porta separados (o usuário informa só
+    o host, sem esquema). Itens antigos guardam uma `url` completa — mantida por
+    compatibilidade, com a porta opcional aplicada ao netloc.
+    """
+    porta = item.get("porta")
+
+    if "url" in item:  # formato legado
+        url = item["url"]
+        if porta:
+            partes = urlparse(url)
+            netloc = f"{partes.hostname or ''}:{porta}"
+            if partes.username:
+                userinfo = partes.username + (f":{partes.password}" if partes.password else "")
+                netloc = f"{userinfo}@{netloc}"
+            url = urlunparse(partes._replace(netloc=netloc))
+        return url
+
+    esquema = "https" if item.get("https", True) else "http"
+    host = item["host"]
+    netloc = f"{host}:{porta}" if porta else host
+    caminho = item.get("caminho") or ""
+    if caminho and not caminho.startswith("/"):
+        caminho = "/" + caminho
+    return urlunparse((esquema, netloc, caminho, "", "", ""))
+
+
+def _campos_http(item: dict) -> dict:
+    """Campos derivados de um alvo HTTP(S) para a resposta da API: host, https,
+    porta, caminho e a url completa — normalizando itens no formato legado (`url`).
+    """
+    if "url" in item:  # legado → decompõe
+        partes = urlparse(item["url"])
+        return {
+            "host": partes.hostname or "",
+            "https": partes.scheme == "https",
+            "porta": item.get("porta") or partes.port,
+            "caminho": partes.path or "",
+            "url": _url_do_alvo(item),
+        }
+    return {
+        "host": item["host"],
+        "https": bool(item.get("https", True)),
+        "porta": item.get("porta"),
+        "caminho": item.get("caminho") or "",
+        "url": _url_do_alvo(item),
+    }
+
+
 def _checar_alvo(item: dict) -> dict:
     """Testa alcançabilidade de um alvo TCP ou HTTP(S). Nunca lança exceção."""
     inicio = time.monotonic()
@@ -207,19 +258,18 @@ def _checar_alvo(item: dict) -> dict:
             historico = _registrar_historico(item["id"], ms)
             return {"online": True, "detalhe": f"{ms} ms", "historico": historico}
 
-        url = item["url"]
-        porta = item.get("porta")
-        if porta:
-            partes = urlparse(url)
-            host = partes.hostname or ""
-            netloc = f"{host}:{porta}"
-            if partes.username:
-                userinfo = partes.username + (f":{partes.password}" if partes.password else "")
-                netloc = f"{userinfo}@{netloc}"
-            url = urlunparse(partes._replace(netloc=netloc))
+        url = _url_do_alvo(item)
+
+        # Check de alcançabilidade: aceitamos qualquer certificado TLS. Painéis
+        # internos (Crafty, roteadores, NAS) quase sempre usam certificado
+        # autoassinado — falhar a verificação marcaria como "offline" um serviço
+        # que na verdade está no ar.
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
 
         req = Request(url, method="GET", headers={"User-Agent": "monitor-web"})
-        with urlopen(req, timeout=5) as resp:
+        with urlopen(req, timeout=5, context=ctx) as resp:
             codigo = resp.status
         ms = round((time.monotonic() - inicio) * 1000)
         online = codigo < 400
@@ -478,7 +528,8 @@ def api_watchlist():
             futuros = {executor.submit(_checar_alvo, item): item for item in itens}
             for futuro in futuros:
                 item = futuros[futuro]
-                resultado.append({**item, **futuro.result()})
+                extra = _campos_http(item) if item["tipo"] == "http" else {}
+                resultado.append({**item, **extra, **futuro.result()})
     resultado.sort(key=lambda x: x["nome"].lower())
     return jsonify({"watchlist": resultado})
 
@@ -511,11 +562,19 @@ def api_watchlist_add():
         item["host"]  = host
         item["porta"] = porta
     else:
-        url = (dados.get("url") or "").strip()
-        partes = urlparse(url)
-        if partes.scheme not in ("http", "https") or not partes.netloc:
-            return jsonify({"success": False, "erro": "URL inválida. Use http:// ou https://"}), 400
-        item["url"] = url
+        host = (dados.get("host") or "").strip()
+        # Tolera colar uma URL completa: extrai só o host (e o esquema, se vier).
+        if "://" in host:
+            partes = urlparse(host)
+            if partes.scheme == "http":
+                dados.setdefault("https", False)
+            host = partes.hostname or ""
+            if partes.port and dados.get("porta") in (None, ""):
+                dados["porta"] = partes.port
+        if not host or not RE_HOST.match(host):
+            return jsonify({"success": False, "erro": "Host inválido."}), 400
+        item["host"]  = host
+        item["https"] = bool(dados.get("https", True))
 
         porta_raw = dados.get("porta")
         if porta_raw not in (None, ""):
@@ -527,11 +586,18 @@ def api_watchlist_add():
                 return jsonify({"success": False, "erro": "Porta deve estar entre 1 e 65535."}), 400
             item["porta"] = porta
 
+        caminho = (dados.get("caminho") or "").strip()
+        if caminho:
+            if not caminho.startswith("/"):
+                caminho = "/" + caminho
+            item["caminho"] = caminho
+
     itens = _carregar_watchlist()
     itens.append(item)
     _salvar_watchlist(itens)
 
-    return jsonify({"success": True, "item": {**item, **_checar_alvo(item)}})
+    extra = _campos_http(item) if item["tipo"] == "http" else {}
+    return jsonify({"success": True, "item": {**item, **extra, **_checar_alvo(item)}})
 
 
 @app.route("/api/network/watchlist/<item_id>", methods=["DELETE"])

@@ -107,12 +107,20 @@
 
     <div id="wl-campos-http" class="hidden">
       <div class="field">
-        <label for="wl-url">URL</label>
-        <input id="wl-url" type="text" placeholder="https://exemplo.com/health" autocomplete="off">
+        <label for="wl-http-host">Host</label>
+        <input id="wl-http-host" type="text" placeholder="Ex: exemplo.com ou 192.168.1.10" autocomplete="off">
+        <small class="field-hint">Só o host — sem <code>http://</code> ou <code>https://</code>. Certificado autoassinado é aceito.</small>
       </div>
       <div class="field">
-        <label for="wl-porta-http">Porta (opcional)</label>
-        <input id="wl-porta-http" type="number" min="1" max="65535" placeholder="Deixe em branco para usar a porta padrão da URL" autocomplete="off">
+        <label for="wl-http-porta">Porta (opcional)</label>
+        <input id="wl-http-porta" type="number" min="1" max="65535" placeholder="Em branco = 80 (HTTP) ou 443 (HTTPS)" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="wl-http-caminho">Caminho (opcional)</label>
+        <input id="wl-http-caminho" type="text" placeholder="Ex: /health" autocomplete="off">
+      </div>
+      <div class="field field-check">
+        <label><input id="wl-http-https" type="checkbox" checked> Usar HTTPS (TLS)</label>
       </div>
     </div>
 

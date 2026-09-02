@@ -125,6 +125,10 @@ html, body {
   outline: none;
 }
 .field input:focus { border-color: var(--azul); }
+.field-hint { display: block; margin-top: 5px; font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+.field-hint code { font-size: 10px; }
+.field-check label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
+.field-check input { width: auto; margin: 0; }
 
 .field select {
   width: 100%; padding: 8px 12px;

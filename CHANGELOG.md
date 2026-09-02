@@ -7,6 +7,19 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### 🐛 Correções
+
+#### 🖥️ Monitor Web do Servidor — Aba Rede
+- **Alvos HTTP(S) da watchlist não sobre TLS**: o check de alcançabilidade agora aceita qualquer certificado (`ssl.CERT_NONE`) — painéis internos (Crafty, roteadores, NAS) quase sempre usam certificado autoassinado, o que marcava como "offline" um serviço que estava no ar (`CERTIFICATE_VERIFY_FAILED`)
+
+### 🔧 Melhorias
+
+#### 🖥️ Monitor Web do Servidor — Aba Rede
+- **Alvo HTTP(S) informa só o host**: o modal de adicionar não pede mais `http://`/`https://` — agora tem campos separados de Host, Porta (opcional), Caminho (opcional) e um checkbox "Usar HTTPS (TLS)". Colar uma URL completa no campo Host também funciona (host, esquema e porta são extraídos automaticamente)
+- Itens da watchlist são guardados com `host`/`https`/`porta`/`caminho` separados; itens no formato antigo (`url` completa) continuam funcionando e são normalizados na resposta da API
+- **Coluna "Alvo" com formato uniforme**: alvos HTTP(S) agora aparecem como `host:porta` (ex: `casa-ratton.local:8443`), igual aos alvos TCP, em vez da URL completa com sufixo `(:porta)`
+- Coluna "Tipo" passa a exibir `HTTPS` ou `HTTP` (antes era sempre `HTTP(S)`)
+
 ### ✨ Novas Funcionalidades
 
 #### 🖥️ Monitor Web do Servidor — Aba Logs

@@ -114,18 +114,27 @@ function sparklineSvg(pontos) {
   </svg>`;
 }
 
+// Rótulo do alvo na coluna "Alvo" — mesmo padrão host:porta para TCP e HTTP(S).
+// Para HTTP(S) sem porta explícita, usa a padrão do esquema (443 HTTPS / 80 HTTP).
+function alvoDoServico(s) {
+  if (s.tipo === 'tcp') return `${s.host}:${s.porta}`;
+  const porta = s.porta ?? (s.https === false ? 80 : 443);
+  const caminho = s.caminho ?? '';
+  return `${s.host}:${porta}${caminho}`;
+}
+
 function renderizarPortas(lista) {
   if (lista.length === 0) {
     $('#tbody-portas').innerHTML = '<tr><td colspan="7" class="loading-row">Nenhum serviço monitorado. Use "+ Adicionar" para incluir um alvo.</td></tr>';
     return;
   }
   $('#tbody-portas').innerHTML = lista.map(s => {
-    const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : (s.porta ? `${s.url} (:${s.porta})` : s.url);
+    const alvo = alvoDoServico(s);
     const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
     return `<tr>
       <td><code style="font-size:11px">${esc(alvo)}</code></td>
       <td><strong>${esc(s.nome)}</strong></td>
-      <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : 'HTTP(S)'}</span></td>
+      <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : (s.https === false ? 'HTTP' : 'HTTPS')}</span></td>
       <td>${esc(s.detalhe ?? '—')}</td>
       <td>${sparklineSvg(s.historico)}</td>
       <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
@@ -139,7 +148,7 @@ function aplicarFiltroPortas() {
   const lista = estado._servicosPorta ?? [];
   if (!termo) { renderizarPortas(lista); return; }
   renderizarPortas(lista.filter(s => {
-    const alvo = s.tipo === 'tcp' ? `${s.host}:${s.porta}` : s.url;
+    const alvo = alvoDoServico(s);
     return s.nome.toLowerCase().includes(termo) || alvo.toLowerCase().includes(termo);
   }));
 }
@@ -202,8 +211,10 @@ function abrirModalWatchlist() {
   $('#wl-tipo').value = 'tcp';
   $('#wl-host').value = '';
   $('#wl-porta').value = '';
-  $('#wl-url').value = '';
-  $('#wl-porta-http').value = '';
+  $('#wl-http-host').value = '';
+  $('#wl-http-porta').value = '';
+  $('#wl-http-caminho').value = '';
+  $('#wl-http-https').checked = true;
   $('#wl-campos-tcp').classList.remove('hidden');
   $('#wl-campos-http').classList.add('hidden');
   $('#wl-erro').classList.add('hidden');
@@ -246,14 +257,17 @@ $('#wl-confirmar')?.addEventListener('click', async () => {
       return;
     }
   } else {
-    body.url = $('#wl-url').value.trim();
-    if (!body.url) {
-      erroEl.textContent = 'Informe a URL.';
+    body.host  = $('#wl-http-host').value.trim();
+    body.https = $('#wl-http-https').checked;
+    if (!body.host) {
+      erroEl.textContent = 'Informe o host.';
       erroEl.classList.remove('hidden');
       return;
     }
-    const portaHttp = $('#wl-porta-http').value.trim();
+    const portaHttp = $('#wl-http-porta').value.trim();
     if (portaHttp) body.porta = portaHttp;
+    const caminho = $('#wl-http-caminho').value.trim();
+    if (caminho) body.caminho = caminho;
   }
 
   const r = await api('/api/network/watchlist', { method: 'POST', body });
