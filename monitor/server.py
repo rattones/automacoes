@@ -247,6 +247,24 @@ def _campos_http(item: dict) -> dict:
     }
 
 
+def _motivo_erro(err: object) -> str:
+    """Razão de falha legível: mensagens comuns de socket/SSL viram texto curto."""
+    texto = str(getattr(err, "strerror", None) or err).strip()
+    conhecidas = {
+        "Connection refused": "Conexão recusada",
+        "No route to host": "Sem rota para o host",
+        "Name or service not known": "Host não encontrado (DNS)",
+        "nodename nor servname provided, or not known": "Host não encontrado (DNS)",
+        "timed out": "Tempo esgotado",
+        "Connection reset by peer": "Conexão encerrada pelo host",
+        "Network is unreachable": "Rede inacessível",
+    }
+    for chave, traducao in conhecidas.items():
+        if chave in texto:
+            return traducao
+    return texto or "Falha desconhecida"
+
+
 def _checar_alvo(item: dict) -> dict:
     """Testa alcançabilidade de um alvo TCP ou HTTP(S). Nunca lança exceção."""
     inicio = time.monotonic()
@@ -256,7 +274,7 @@ def _checar_alvo(item: dict) -> dict:
                 pass
             ms = round((time.monotonic() - inicio) * 1000)
             historico = _registrar_historico(item["id"], ms)
-            return {"online": True, "detalhe": f"{ms} ms", "historico": historico}
+            return {"online": True, "detalhe": f"TCP · {ms} ms", "historico": historico}
 
         url = _url_do_alvo(item)
 
@@ -274,16 +292,16 @@ def _checar_alvo(item: dict) -> dict:
         ms = round((time.monotonic() - inicio) * 1000)
         online = codigo < 400
         historico = _registrar_historico(item["id"], ms if online else None)
-        return {"online": online, "detalhe": f"HTTP {codigo} — {ms} ms", "historico": historico}
+        return {"online": online, "detalhe": f"HTTP {codigo} · {ms} ms", "historico": historico}
     except HTTPError as e:
         historico = _registrar_historico(item["id"], None)
         return {"online": e.code < 500, "detalhe": f"HTTP {e.code}", "historico": historico}
     except URLError as e:
         historico = _registrar_historico(item["id"], None)
-        return {"online": False, "detalhe": str(e.reason), "historico": historico}
+        return {"online": False, "detalhe": _motivo_erro(e.reason), "historico": historico}
     except OSError as e:
         historico = _registrar_historico(item["id"], None)
-        return {"online": False, "detalhe": str(e), "historico": historico}
+        return {"online": False, "detalhe": _motivo_erro(e), "historico": historico}
 
 # ── TLS / HTTPS ────────────────────────────────────────────────────────────────
 

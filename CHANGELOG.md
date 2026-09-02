@@ -18,6 +18,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Alvo HTTP(S) informa só o host**: o modal de adicionar não pede mais `http://`/`https://` — agora tem campos separados de Host, Porta (opcional), Caminho (opcional) e um checkbox "Usar HTTPS (TLS)". Colar uma URL completa no campo Host também funciona (host, esquema e porta são extraídos automaticamente)
 - Itens da watchlist são guardados com `host`/`https`/`porta`/`caminho` separados; itens no formato antigo (`url` completa) continuam funcionando e são normalizados na resposta da API
 - **Coluna "Alvo" com formato uniforme**: alvos HTTP(S) agora aparecem como `host:porta` (ex: `casa-ratton.local:8443`), igual aos alvos TCP, em vez da URL completa com sufixo `(:porta)`
+- **Coluna "Detalhe" com formato uniforme**: online mostra `HTTP 200 · 45 ms` (HTTP/S) ou `TCP · 12 ms` (TCP), com o mesmo separador `·`; offline traduz as mensagens de erro mais comuns de socket/DNS para português ("Conexão recusada", "Host não encontrado (DNS)", "Tempo esgotado", etc.)
 - Coluna "Tipo" passa a exibir `HTTPS` ou `HTTP` (antes era sempre `HTTP(S)`)
 
 ### ✨ Novas Funcionalidades
