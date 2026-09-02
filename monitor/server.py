@@ -258,6 +258,9 @@ def _motivo_erro(err: object) -> str:
         "timed out": "Tempo esgotado",
         "Connection reset by peer": "Conexão encerrada pelo host",
         "Network is unreachable": "Rede inacessível",
+        "WRONG_VERSION_NUMBER": "A porta não responde HTTPS (use o tipo TCP?)",
+        "UNKNOWN_PROTOCOL": "A porta não responde HTTPS (use o tipo TCP?)",
+        "record layer failure": "A porta não responde HTTPS (use o tipo TCP?)",
     }
     for chave, traducao in conhecidas.items():
         if chave in texto:

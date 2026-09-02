@@ -273,7 +273,11 @@ $('#wl-confirmar')?.addEventListener('click', async () => {
   const r = await api('/api/network/watchlist', { method: 'POST', body });
   if (r?.success) {
     $('#watchlist-modal').classList.add('hidden');
-    toast(`"${nome}" adicionado ao monitoramento`, 'ok');
+    if (r.item && r.item.online === false) {
+      toast(`"${nome}" adicionado, mas está offline: ${r.item.detalhe ?? '—'}`, 'aviso');
+    } else {
+      toast(`"${nome}" adicionado ao monitoramento`, 'ok');
+    }
     await carregarRede(true);
   } else {
     erroEl.textContent = r?.erro ?? 'Erro ao adicionar alvo.';
