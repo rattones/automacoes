@@ -268,11 +268,6 @@ def _motivo_erro(err: object) -> str:
     return texto or "Falha desconhecida"
 
 
-# Erros de handshake TLS que indicam "a porta existe, mas não fala HTTPS"
-# (ex.: apontar HTTPS para porta SSH, MySQL, HTTP puro, etc.).
-_ERROS_NAO_TLS = ("WRONG_VERSION_NUMBER", "UNKNOWN_PROTOCOL", "record layer failure")
-
-
 def _porta_do_alvo(item: dict) -> int | None:
     """Porta efetiva de um alvo HTTP(S): explícita, ou a padrão do esquema."""
     porta = item.get("porta")
@@ -284,74 +279,58 @@ def _porta_do_alvo(item: dict) -> int | None:
     return 443 if item.get("https", True) else 80
 
 
-def _tcp_responde(host: str, porta: int) -> bool:
-    try:
-        with socket.create_connection((host, porta), timeout=3):
-            return True
-    except OSError:
-        return False
+# ── Sondagem de alcançabilidade ──────────────────────────────────────────────
+#
+# `_probar_*` são funções puras: só testam a rede, sem tocar em histórico.
+# `_checar_alvo` (usado no polling) adiciona a persistência do histórico por cima.
 
-
-def _sugestao_tipo(item: dict, motivo: str) -> str | None:
-    """Se o alvo HTTP(S) falhou de um jeito que indica tipo errado e a porta
-    responde a TCP puro, sugere trocar o tipo. Retorna None se não há sugestão.
-    """
-    if item["tipo"] != "http":
-        return None
-    if not any(marca in motivo for marca in _ERROS_NAO_TLS):
-        return None
-    porta = _porta_do_alvo(item)
-    if porta and _tcp_responde(item.get("host") or urlparse(item.get("url", "")).hostname or "", porta):
-        return (
-            f"A porta {porta} aceita conexão TCP mas não responde HTTPS. "
-            f'Troque o tipo deste alvo para "TCP" (verifica só se a porta está aberta).'
-        )
-    return None
-
-
-def _checar_alvo(item: dict) -> dict:
-    """Testa alcançabilidade de um alvo TCP ou HTTP(S). Nunca lança exceção."""
+def _probar_tcp(host: str, porta: int) -> dict:
+    """Testa se `host:porta` aceita conexão TCP. Nunca lança."""
     inicio = time.monotonic()
     try:
-        if item["tipo"] == "tcp":
-            with socket.create_connection((item["host"], item["porta"]), timeout=3):
-                pass
-            ms = round((time.monotonic() - inicio) * 1000)
-            historico = _registrar_historico(item["id"], ms)
-            return {"online": True, "detalhe": f"TCP · {ms} ms", "historico": historico}
+        with socket.create_connection((host, porta), timeout=3):
+            pass
+        ms = round((time.monotonic() - inicio) * 1000)
+        return {"online": True, "ms": ms, "detalhe": f"TCP · {ms} ms"}
+    except OSError as e:
+        return {"online": False, "ms": None, "detalhe": _motivo_erro(e)}
 
+
+def _probar_http(item: dict) -> dict:
+    """Testa se o alvo HTTP(S) responde. Aceita qualquer certificado TLS. Nunca lança."""
+    inicio = time.monotonic()
+    try:
         url = _url_do_alvo(item)
-
-        # Check de alcançabilidade: aceitamos qualquer certificado TLS. Painéis
-        # internos (Crafty, roteadores, NAS) quase sempre usam certificado
-        # autoassinado — falhar a verificação marcaria como "offline" um serviço
-        # que na verdade está no ar.
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-
         req = Request(url, method="GET", headers={"User-Agent": "monitor-web"})
         with urlopen(req, timeout=5, context=ctx) as resp:
             codigo = resp.status
         ms = round((time.monotonic() - inicio) * 1000)
         online = codigo < 400
-        historico = _registrar_historico(item["id"], ms if online else None)
-        return {"online": online, "detalhe": f"HTTP {codigo} · {ms} ms", "historico": historico}
+        return {"online": online, "ms": ms if online else None, "detalhe": f"HTTP {codigo} · {ms} ms"}
     except HTTPError as e:
-        historico = _registrar_historico(item["id"], None)
-        return {"online": e.code < 500, "detalhe": f"HTTP {e.code}", "historico": historico}
+        return {"online": e.code < 500, "ms": None, "detalhe": f"HTTP {e.code}"}
     except (URLError, OSError) as e:
-        raw = str(getattr(e, "reason", None) or e)
-        historico = _registrar_historico(item["id"], None)
-        resultado = {
-            "online": False,
-            "detalhe": _motivo_erro(getattr(e, "reason", None) or e),
-            "historico": historico,
-        }
-        sugestao = _sugestao_tipo(item, raw)
-        if sugestao:
-            resultado["sugestao"] = sugestao
-        return resultado
+        return {"online": False, "ms": None, "detalhe": _motivo_erro(getattr(e, "reason", None) or e)}
+
+
+def _probar_item(item: dict) -> dict:
+    """Sonda o alvo pelo seu tipo (`tcp` ou `http`). Sem histórico."""
+    if item["tipo"] == "tcp":
+        return _probar_tcp(item["host"], int(item["porta"]))
+    return _probar_http(item)
+
+
+def _checar_alvo(item: dict) -> dict:
+    """Sonda um alvo já monitorado (pelo tipo salvo) e persiste o histórico.
+
+    Não re-valida o tipo: a escolha foi confirmada ao adicionar o alvo.
+    """
+    r = _probar_item(item)
+    historico = _registrar_historico(item["id"], r["ms"])
+    return {"online": r["online"], "detalhe": r["detalhe"], "historico": historico}
 
 # ── TLS / HTTPS ────────────────────────────────────────────────────────────────
 
@@ -659,6 +638,36 @@ def api_watchlist_add():
             if not caminho.startswith("/"):
                 caminho = "/" + caminho
             item["caminho"] = caminho
+
+    # Antes de salvar: sonda o tipo escolhido. Se ele não responder mas o outro
+    # tipo na mesma host:porta responder, devolve uma sugestão de troca e NÃO
+    # salva — o usuário confirma reenviando com `forcar: true` (ou trocando o
+    # tipo). Se nenhum responder, salva mesmo assim (offline de verdade).
+    forcar = bool(dados.get("forcar"))
+    if not forcar:
+        porta_efetiva = _porta_do_alvo(item) if item["tipo"] == "http" else item["porta"]
+        r_escolhido = _probar_item(item)
+        if not r_escolhido["online"] and porta_efetiva:
+            tipo_alt = "tcp" if item["tipo"] == "http" else "http"
+            item_alt = (
+                {"tipo": "tcp", "host": item["host"], "porta": porta_efetiva}
+                if tipo_alt == "tcp"
+                else {"tipo": "http", "host": item["host"], "https": True, "porta": porta_efetiva}
+            )
+            if _probar_item(item_alt)["online"]:
+                rotulo = {"tcp": "TCP", "http": "HTTPS"}[tipo_alt]
+                return jsonify({
+                    "success": False,
+                    "sugestao": {
+                        "tipo": tipo_alt,
+                        "https": tipo_alt == "http",
+                        "mensagem": (
+                            f'{item["host"]}:{porta_efetiva} não respondeu como '
+                            f'{"HTTPS" if item["tipo"] == "http" else "TCP"}, '
+                            f"mas responde como {rotulo}. Deseja monitorar como {rotulo}?"
+                        ),
+                    },
+                }), 409
 
     itens = _carregar_watchlist()
     itens.append(item)

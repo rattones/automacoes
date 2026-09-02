@@ -131,14 +131,11 @@ function renderizarPortas(lista) {
   $('#tbody-portas').innerHTML = lista.map(s => {
     const alvo = alvoDoServico(s);
     const badgeStatus = s.online ? 'badge-active' : 'badge-failed';
-    const detalhe = s.sugestao
-      ? `${esc(s.detalhe ?? '—')}<br><small class="wl-sugestao" title="${esc(s.sugestao)}">⚠ ${esc(s.sugestao)}</small>`
-      : esc(s.detalhe ?? '—');
     return `<tr>
       <td><code style="font-size:11px">${esc(alvo)}</code></td>
       <td><strong>${esc(s.nome)}</strong></td>
       <td><span class="versao-chip">${s.tipo === 'tcp' ? 'TCP' : (s.https === false ? 'HTTP' : 'HTTPS')}</span></td>
-      <td>${detalhe}</td>
+      <td>${esc(s.detalhe ?? '—')}</td>
       <td>${sparklineSvg(s.historico)}</td>
       <td><span class="badge ${badgeStatus}">${s.online ? 'online' : 'offline'}</span></td>
       <td><button class="btn btn-ghost-danger btn-xs" onclick="excluirWatchlist('${esc(s.id)}')" title="Remover monitoramento">✕</button></td>
@@ -237,10 +234,9 @@ $('#wl-cancelar')?.addEventListener('click', () => {
   $('#watchlist-modal').classList.add('hidden');
 });
 
-$('#wl-confirmar')?.addEventListener('click', async () => {
-  const erroEl = $('#wl-erro');
-  erroEl.classList.add('hidden');
-
+// Monta o corpo do POST a partir dos campos do modal. Retorna null e mostra
+// erro inline se algum campo obrigatório estiver vazio.
+function montarBodyWatchlist(erroEl) {
   const nome = $('#wl-nome').value.trim();
   const tipo = $('#wl-tipo').value;
   const body = { nome, tipo };
@@ -248,7 +244,7 @@ $('#wl-confirmar')?.addEventListener('click', async () => {
   if (!nome) {
     erroEl.textContent = 'Informe um nome.';
     erroEl.classList.remove('hidden');
-    return;
+    return null;
   }
 
   if (tipo === 'tcp') {
@@ -257,7 +253,7 @@ $('#wl-confirmar')?.addEventListener('click', async () => {
     if (!body.host || !body.porta) {
       erroEl.textContent = 'Informe host e porta.';
       erroEl.classList.remove('hidden');
-      return;
+      return null;
     }
   } else {
     body.host  = $('#wl-http-host').value.trim();
@@ -265,29 +261,49 @@ $('#wl-confirmar')?.addEventListener('click', async () => {
     if (!body.host) {
       erroEl.textContent = 'Informe o host.';
       erroEl.classList.remove('hidden');
-      return;
+      return null;
     }
     const portaHttp = $('#wl-http-porta').value.trim();
     if (portaHttp) body.porta = portaHttp;
     const caminho = $('#wl-http-caminho').value.trim();
     if (caminho) body.caminho = caminho;
   }
+  return body;
+}
 
+async function enviarWatchlist(body, erroEl) {
   const r = await api('/api/network/watchlist', { method: 'POST', body });
+
+  // Servidor sondou os dois tipos e o tipo escolhido não respondeu, mas o
+  // outro sim — pede confirmação antes de salvar.
+  if (r && r.success === false && r.sugestao) {
+    const s = r.sugestao;
+    if (confirm(s.mensagem)) {
+      return enviarWatchlist({ ...body, tipo: s.tipo, https: s.https, forcar: true }, erroEl);
+    }
+    // usuário recusou: salva do jeito que pediu
+    return enviarWatchlist({ ...body, forcar: true }, erroEl);
+  }
+
   if (r?.success) {
     $('#watchlist-modal').classList.add('hidden');
-    if (r.item && r.item.sugestao) {
-      toast(`"${nome}" adicionado. ${r.item.sugestao}`, 'aviso', 7000);
-    } else if (r.item && r.item.online === false) {
-      toast(`"${nome}" adicionado, mas está offline: ${r.item.detalhe ?? '—'}`, 'aviso');
+    if (r.item && r.item.online === false) {
+      toast(`"${r.item.nome}" adicionado, mas está offline: ${r.item.detalhe ?? '—'}`, 'aviso');
     } else {
-      toast(`"${nome}" adicionado ao monitoramento`, 'ok');
+      toast(`"${r.item?.nome ?? body.nome}" adicionado ao monitoramento`, 'ok');
     }
     await carregarRede(true);
   } else {
     erroEl.textContent = r?.erro ?? 'Erro ao adicionar alvo.';
     erroEl.classList.remove('hidden');
   }
+}
+
+$('#wl-confirmar')?.addEventListener('click', async () => {
+  const erroEl = $('#wl-erro');
+  erroEl.classList.add('hidden');
+  const body = montarBodyWatchlist(erroEl);
+  if (body) await enviarWatchlist(body, erroEl);
 });
 
 async function excluirWatchlist(id) {
