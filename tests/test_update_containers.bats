@@ -33,3 +33,17 @@ setup() {
 @test "atualizar_container.sh reinicia containers" {
     grep -q "docker compose up -d" "$SCRIPT_DIR/lib/atualizar_container.sh"
 }
+
+@test "atualizar_container.sh registra o status dos containers uma única vez" {
+    [ "$(grep -c 'docker compose ps' "$SCRIPT_DIR/lib/atualizar_container.sh")" -eq 1 ]
+}
+
+@test "limpar_imagens_antigas remove imagens e build cache não utilizados (-a)" {
+    grep -q "docker image prune -a -f" "$SCRIPT_DIR/lib/atualizar_container.sh"
+    grep -q "docker builder prune -a -f" "$SCRIPT_DIR/lib/atualizar_container.sh"
+}
+
+@test "limpar_imagens_antigas não remove volumes nomeados" {
+    grep -q "docker volume prune -f" "$SCRIPT_DIR/lib/atualizar_container.sh"
+    ! grep -q "docker volume prune -a" "$SCRIPT_DIR/lib/atualizar_container.sh"
+}

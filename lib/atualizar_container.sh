@@ -64,7 +64,6 @@ atualizar_container() {
     # Aguardar e verificar status
     sleep 5
     log_indent "Status dos containers de $nome:"
-    docker compose ps >> "$LOG_FILE" 2>&1
     docker compose ps | tee -a "$LOG_FILE"
     
     # Voltar ao diretório original
@@ -85,15 +84,15 @@ limpar_imagens_antigas() {
         return 1
     fi
     
-    log "Removendo imagens antigas..."
-    if docker image prune -f >> "$LOG_FILE" 2>&1; then
+    log "Removendo imagens não utilizadas..."
+    if docker image prune -a -f >> "$LOG_FILE" 2>&1; then
         log_sucesso "Imagens antigas removidas com sucesso"
     else
         log_aviso "Falha ao remover imagens antigas"
     fi
 
     log "Removendo build cache não utilizado..."
-    if docker builder prune -f >> "$LOG_FILE" 2>&1; then
+    if docker builder prune -a -f >>"$LOG_FILE" 2>&1; then
         log_sucesso "Build cache removido com sucesso"
     else
         log_aviso "Falha ao remover build cache"

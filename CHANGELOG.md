@@ -9,6 +9,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### 🐛 Correções
 
+#### 🔄 Atualização do Servidor
+- **Autoremove registra o que fez**: o log dizia "Nenhum pacote desnecessário encontrado" sempre que o `apt autoremove` terminava sem erro, mesmo quando removia pacotes (ex.: headers de kernel antigo). Agora conta antes via `apt-get -s autoremove` e informa quantos pacotes foram removidos
+- **Limpeza de versões antigas do Node.js**: usava `nvm ls` com aliases, então tentava "remover" `system`, `lts/argon`…`lts/jod` e contava 11–12 remoções por semana. Agora usa `nvm ls --no-alias` e compara a versão atual de forma exata
+- **Status dos containers duplicado**: a tabela do `docker compose ps` era gravada duas vezes no log
+- **Limpeza do Docker efetiva**: `image prune` e `builder prune` passam a usar `-a`, removendo imagens órfãs e todo o build cache não utilizado (~4 GB que nunca eram liberados). Volumes nomeados continuam preservados
+- **Mensagens de NVM, Node.js e npm** distinguem "já está na versão mais recente" de "atualizado: X → Y"; o npm não é mais reinstalado quando já está na última versão
+
 #### 🖥️ Monitor Web do Servidor — Aba Rede
 - **Alvos HTTP(S) da watchlist não sobre TLS**: o check de alcançabilidade agora aceita qualquer certificado (`ssl.CERT_NONE`) — painéis internos (Crafty, roteadores, NAS) quase sempre usam certificado autoassinado, o que marcava como "offline" um serviço que estava no ar (`CERTIFICATE_VERIFY_FAILED`)
 

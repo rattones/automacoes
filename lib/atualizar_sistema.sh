@@ -53,9 +53,16 @@ dist_upgrade_sistema() {
 # Remover pacotes desnecessários
 remover_pacotes_desnecessarios() {
     log "Removendo pacotes desnecessários..."
-    
-    if apt autoremove -y -qq; then
+
+    local qtd=$(apt-get -s autoremove 2>/dev/null | grep -c '^Remv')
+
+    if [ "$qtd" -eq 0 ]; then
         log "Nenhum pacote desnecessário encontrado"
+        return 0
+    fi
+
+    if apt autoremove -y -qq; then
+        log_sucesso "$qtd pacote(s) desnecessário(s) removido(s)"
         return 0
     else
         log_aviso "Falha ao remover pacotes desnecessários"

@@ -41,7 +41,12 @@ atualizar_nvm() {
         
         if git checkout "$latest_tag" >> "$LOG_FILE" 2>&1; then
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            log_sucesso "NVM atualizado para versão: $(nvm --version)"
+            local versao_nova=$(nvm --version 2>/dev/null)
+            if [ "$versao_nova" = "$versao_atual" ]; then
+                log "NVM já está na versão mais recente: $versao_nova"
+            else
+                log_sucesso "NVM atualizado: $versao_atual → $versao_nova"
+            fi
             cd - > /dev/null
             return 0
         else
@@ -67,19 +72,28 @@ atualizar_nodejs() {
     fi
     
     log "Verificando versão atual do Node.js..."
-    
+
+    local versao_anterior=""
     if command -v node &> /dev/null; then
-        log "Versão atual: $(node --version)"
+        versao_anterior=$(node --version)
+        log "Versão atual: $versao_anterior"
     else
         log "Node.js não está instalado"
     fi
-    
+
     log "Instalando/atualizando para versão LTS..."
-    
+
     if nvm install --lts >> "$LOG_FILE" 2>&1; then
         nvm use --lts >> "$LOG_FILE" 2>&1
         nvm alias default 'lts/*' >> "$LOG_FILE" 2>&1
-        log_sucesso "Node.js atualizado: $(node --version)"
+        local versao_nova=$(node --version)
+        if [ "$versao_nova" = "$versao_anterior" ]; then
+            log "Node.js já está na versão LTS mais recente: $versao_nova"
+        elif [ -z "$versao_anterior" ]; then
+            log_sucesso "Node.js instalado: $versao_nova"
+        else
+            log_sucesso "Node.js atualizado: $versao_anterior → $versao_nova"
+        fi
         return 0
     else
         log_erro "Falha ao atualizar Node.js"
@@ -99,10 +113,17 @@ atualizar_npm() {
     
     local versao_atual=$(npm --version)
     log "Versão atual do npm: $versao_atual"
+
+    local versao_publicada=$(npm view npm version 2>/dev/null)
+    if [ -n "$versao_publicada" ] && [ "$versao_publicada" = "$versao_atual" ]; then
+        log "npm já está na versão mais recente: $versao_atual"
+        return 0
+    fi
+
     log "Atualizando npm para versão mais recente..."
-    
+
     if npm install -g npm@latest >> "$LOG_FILE" 2>&1; then
-        log_sucesso "npm atualizado: $(npm --version)"
+        log_sucesso "npm atualizado: $versao_atual → $(npm --version)"
         return 0
     else
         log_erro "Falha ao atualizar npm"
@@ -122,8 +143,13 @@ limpar_versoes_antigas_nodejs() {
     log "Procurando versões antigas do Node.js..."
     
     local versao_atual=$(nvm current)
-    local versoes_antigas=$(nvm ls | grep -v "$versao_atual" | grep -E "v[0-9]" | awk '{print $1}' | sed 's/->/ /g' | tr -d '*' | xargs)
-    
+    local versoes_antigas=""
+    local versao
+    # --no-alias evita que aliases (system, lts/argon...) sejam tratados como versões instaladas
+    for versao in $(nvm ls --no-colors --no-alias 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u); do
+        [ "$versao" != "$versao_atual" ] && versoes_antigas="$versoes_antigas $versao"
+    done
+
     if [ -z "$versoes_antigas" ]; then
         log "Nenhuma versão antiga encontrada"
         return 0
