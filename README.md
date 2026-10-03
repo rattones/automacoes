@@ -120,6 +120,7 @@ O script de post-instalação é modular e funciona em duas etapas:
    - `setup-nodejs.sh` - Node.js via NVM
    - `setup-containers.sh` - Deploy containers (Crafty, HAOS)
    - `setup-projects.sh` - Restauração de backups
+   - `setup-monitor.sh` - Monitor web do servidor (HTTPS, porta 8180)
 
 **O que será instalado:**
 - ✅ Atualização completa do sistema
@@ -158,6 +159,7 @@ docker ps
 # - Cockpit: https://[IP-do-servidor]:9090
 # - Crafty: http://[IP-do-servidor]:8000
 # - Home Assistant: http://[IP-do-servidor]:8123
+# - Monitor do servidor: https://[IP-do-servidor]:8180
 ```
 
 ---
@@ -192,8 +194,9 @@ automacoes/
 │   ├── setup.sh                   # Instalação do monitor
 │   ├── requirements.txt           # Dependências Python
 │   ├── templates/index.html       # Interface web (SPA)
-│   ├── static/                    # CSS, JS, favicons
-│   └── scripts/                   # Scripts de coleta de métricas
+│   ├── static/                    # CSS, JS (módulos ES por aba), favicons
+│   ├── scripts/                   # Scripts de coleta de métricas
+│   └── data/                      # CA local, certificados e watchlist (não versionado)
 ├── backups/                       # Backups de configurações
 │   ├── crafty/compose.yml         # Backup Crafty Controller
 │   ├── haos/compose.yml           # Backup Home Assistant
@@ -201,7 +204,8 @@ automacoes/
 │   ├── zsh/.p10k.zsh              # Backup configuração Powerlevel10k
 │   ├── projetos/                  # Backups de projetos (.zip)
 │   └── README.md                  # Documentação de backups
-└── logs/                          # Logs de execução (não versionado)
+├── logs/                          # Logs de execução (não versionado)
+└── logs_md/                       # Logs convertidos para Markdown (não versionado)
 ```
 
 ## Componentes
@@ -228,6 +232,7 @@ automacoes/
 - **setup-nodejs.sh**: Node.js LTS via NVM
 - **setup-containers.sh**: Deploy de containers (Crafty, HAOS)
 - **setup-projects.sh**: Restauração de backups de projetos
+- **setup-monitor.sh**: Monitor web (dependências Python, serviço systemd, CA local e certificado HTTPS, sudoers do `dmidecode`)
 
 ### 2. Sistema de Atualização Automática
 
@@ -244,7 +249,9 @@ automacoes/
 - `log_sucesso()` - Log de sucesso (verde)
 - `log_aviso()` - Log de avisos (amarelo)
 - `log_info()` - Log informativo (azul)
-- `log_separador()` - Separador visual
+- `log_progresso()` - Log de progresso (azul)
+- `log_separador()` / `log_subseparador()` - Separadores visuais
+- `log_indent()` - Log indentado (subetapas)
 - `inicializar_log()` - Inicializa sistema de logs
 
 ### 4. Atualização de Sistema (lib/atualizar_sistema.sh)
@@ -253,39 +260,44 @@ automacoes/
 - `verificar_pacotes_disponiveis()` - Conta pacotes atualizáveis
 - `upgrade_pacotes()` - apt upgrade
 - `dist_upgrade_sistema()` - apt dist-upgrade
-- `remover_pacotes_desnecessarios()` - apt autoremove
+- `remover_pacotes_desnecessarios()` - apt autoremove; simula antes (`apt-get -s`) e registra quantos pacotes foram removidos
 - `limpar_cache_apt()` - apt autoclean
 - `atualizar_sistema_completo()` - Executa todo o fluxo
 
 ### 5. Atualização de Containers (lib/atualizar_container.sh)
 **Funções:**
-- `atualizar_container(nome, diretório)` - Atualiza um container específico
-- `limpar_imagens_antigas()` - Remove imagens Docker não utilizadas
+- `atualizar_container(nome, diretório)` - `docker compose pull` + `up -d` e registra o status dos containers
+- `limpar_imagens_antigas()` - Remove imagens sem nenhum container associado e todo o build cache não utilizado (`prune -a`), além de volumes anônimos. Volumes nomeados são preservados
 - `atualizar_containers(...)` - Atualiza múltiplos containers
 
 ### 6. Atualização de Node.js (lib/atualizar_nodejs.sh)
 **Funções:**
-- `atualizar_nvm()` - Atualiza NVM via git
-- `atualizar_nodejs()` - Atualiza para versão LTS
-- `atualizar_npm()` - Atualiza NPM para última versão
-- `limpar_versoes_antigas_nodejs()` - Remove versões antigas do Node.js
+- `verificar_nvm_instalado()` - Verifica se NVM está instalado
+- `atualizar_nvm()` - Atualiza NVM para a tag mais recente via git
+- `atualizar_nodejs()` - Atualiza Node.js para a versão LTS
+- `atualizar_npm()` - Atualiza npm; só reinstala quando há versão nova publicada
+- `limpar_versoes_antigas_nodejs()` - Remove versões instaladas diferentes da atual (ignora aliases do NVM)
 - `atualizar_nodejs_completo()` - Executa todo o fluxo
+
+O log distingue "já está na versão mais recente" de "atualizado: X → Y" para NVM, Node.js e npm.
 
 ### 7. Verificação de Sistema (lib/verificar_sistema.sh)
 **Funções:**
 - `registrar_info_sistema()` - Registra informações do sistema
-- `verificar_necessidade_reinicializacao()` - Verifica se requer reboot
+- `verificar_necessidade_reinicializacao()` - Verifica se requer reboot (e agenda reinicialização automática em 5 minutos)
 - `mostrar_estatisticas()` - Exibe uso de disco, memória, etc
 - `enviar_notificacao_email()` - Envia notificação por email
 
-### 6. Atualização de Node.js (lib/atualizar_nodejs.sh)
+### 8. Backup de Configurações (lib/backup_configs.sh)
 **Funções:**
-- `verificar_nvm_instalado()` - Verifica se NVM está instalado
-- `atualizar_nvm()` - Atualiza NVM para versão mais recente
-- `atualizar_nodejs()` - Atualiza Node.js para versão LTS
-- `atualizar_npm()` - Atualiza npm para versão mais recente
-- `limpar_versoes_antigas_nodejs()` - Remove versões antigas do Node.js
-- `atualizar_nodejs_completo()` - Executa todo o fluxo de atualização
+- `backup_crafty()` / `backup_home_assistant()` - Backup específico de cada container
+- `backup_container_config(nome, diretório)` - Backup de um container
+- `backup_todas_configs()` - Backup de todos os containers do array `CONTAINERS`
+- `listar_backups()` - Lista backups existentes
+- `restaurar_backup()` - Restaura um backup
+
+### 9. Conversor de Logs (lib/converter_log_md.sh)
+Converte logs de execução para Markdown — ver [Ferramentas Adicionais](#️-ferramentas-adicionais).
 
 ---
 
@@ -321,7 +333,7 @@ Para visualizar logs em formato Markdown (mais legível):
 ```bash
 ./lib/converter_log_md.sh logs/atualizacao_20240128_030000.log
 ```
-Os arquivos convertidos ficam em: `/home/rattones/projetos/automacoes/logs-md/`
+Os arquivos convertidos ficam em: `/home/rattones/projetos/automacoes/logs_md/`
 
 ## 🛠️ Diagnóstico e Manutenção
 
@@ -417,7 +429,7 @@ O script `converter_log_md.sh` converte arquivos de log em formato Markdown para
 - ✅ **Detecção de tabelas** - Converte tabelas Docker (ps, stats) para Markdown
 - ✅ **Formatação de mensagens** - Destaque para [SUCESSO], [ERRO], [AVISO], [INFO]
 - ✅ **Estrutura organizada** - Headers, separadores e formatação limpa
-- ✅ **Diretório automático** - Cria pasta `logs-md/` para arquivos convertidos
+- ✅ **Diretório automático** - Cria pasta `logs_md/` para arquivos convertidos
 
 #### Exemplo de Saída
 ```markdown
@@ -440,7 +452,7 @@ Atualização do sistema concluída
 As variáveis podem ser personalizadas:
 ```bash
 export LOGS_DIR="/caminho/dos/logs"          # Diretório de logs fonte
-export LOGS_MD_DIR="/caminho/dos/logs-md"    # Diretório de saída
+export LOGS_MD_DIR="/caminho/dos/logs_md"    # Diretório de saída
 ```
 
 ---
@@ -450,7 +462,7 @@ export LOGS_MD_DIR="/caminho/dos/logs-md"    # Diretório de saída
 O sistema inclui funcionalidade automática de backup das configurações dos containers gerenciados.
 
 ### Funcionalidades de Backup
-- ✅ **Backup automático** - Configurações salvas antes das atualizações
+- ✅ **Backup sob demanda** - Funções para salvar configurações de um ou de todos os containers
 - ✅ **Múltiplos formatos** - Arquivos individuais e pacotes tar.gz
 - ✅ **Estrutura organizada** - Backups separados por container
 - ✅ **Histórico preservado** - Múltiplas versões mantidas
@@ -469,6 +481,34 @@ backups/
     └── ...                         # Outros backups
 ```
 
+### Como Usar
+```bash
+# Carregar bibliotecas necessárias
+source lib/logging.sh
+source lib/backup_configs.sh
+
+# Fazer backup de um container específico
+backup_container_config "Crafty" "/home/rattones/crafty"
+backup_container_config "Home Assistant" "/home/rattones/haos"
+
+# Fazer backup de todos os containers
+declare -a CONTAINERS=(
+    "Crafty" "/home/rattones/crafty"
+    "Home Assistant" "/home/rattones/haos"
+)
+backup_todas_configs
+
+# Listar backups existentes
+listar_backups
+```
+
+### Pastas de Configuração
+- **Crafty Controller**: `docker/config/` (mapeado para `/crafty/app/config`)
+- **Home Assistant**: `config/` ou `/home/rattones/.homeassistant` ou `/config`
+
+### Integração com Atualização
+O `atualizar_servidor.sh` **não** chama o backup hoje — execute-o manualmente (ou via cron) antes de atualizações que mudem configurações dos containers.
+
 ---
 
 ## 🖥️ Monitor Web do Servidor
@@ -485,7 +525,9 @@ Login com usuário e senha do sistema operacional.
 ```bash
 bash monitor/setup.sh
 ```
-O script instala dependências Python, cria o serviço systemd e o inicia automaticamente.
+O `monitor/setup.sh` é um atalho para `lib/post-install/setup-monitor.sh`: instala dependências Python, gera a CA local e o certificado HTTPS, cria o serviço systemd e o inicia automaticamente.
+
+A interface atualiza as métricas a cada 5 s e as abas/watchlist a cada 15 s.
 
 ### HTTPS
 O monitor roda em HTTPS por padrão, usando uma **CA (autoridade certificadora) local
@@ -528,8 +570,13 @@ faz o servidor subir em HTTP puro.
 
 #### Aba Rede
 - Tabela de interfaces (estado, MAC, IPs, velocidade rx/tx em Mbps)
-- Tabela de portas em escuta com filtro por porta/processo/serviço
-- Watchlist de alvos TCP ou HTTP(S) monitorados manualmente (host:porta ou URL), com checagem periódica de status online/offline e latência
+- **Serviços em Escuta (watchlist)**: alvos TCP ou HTTP/HTTPS adicionados manualmente, com checagem periódica de status online/offline e latência
+  - Modal de adicionar com campos separados de Host, Porta (opcional), Caminho (opcional) e checkbox "Usar HTTPS (TLS)"; colar uma URL completa no Host também funciona
+  - Ao adicionar, o servidor sonda `host:porta` nos dois tipos (HTTP/S e TCP) e, se só o outro tipo responder, sugere a troca antes de salvar (ex.: HTTPS numa porta SSH → TCP)
+  - Alvos HTTPS aceitam certificado autoassinado (painéis internos, roteadores, NAS)
+  - Colunas com formato uniforme: Alvo `host:porta`, Tipo `HTTPS`/`HTTP`/`TCP`, Detalhe `HTTP 200 · 45 ms` ou `TCP · 12 ms`; erros offline traduzidos ("Conexão recusada", "Host não encontrado (DNS)", "A porta não responde HTTPS"…)
+  - Aviso quando um alvo recém-adicionado já está offline
+- **Portas Detectadas Automaticamente**: portas em escuta locais (via `ss`), em bloco recolhido por padrão, com filtro por porta/processo/serviço e contador
 - Mini-gráfico (sparkline) com o histórico das últimas 20 leituras de latência de cada alvo da watchlist; leituras offline aparecem como marcador na base do gráfico
 - Histórico de latência persistido em `monitor/data/watchlist_historico.json`, removido automaticamente quando o alvo é excluído da watchlist
 
@@ -539,6 +586,7 @@ faz o servidor subir em HTTP puro.
 
 #### Aba Containers
 - Lista de containers Docker com estado e ações (start, stop, restart)
+- Uso de recursos por container (CPU, memória, swap, rede, disco) ao expandir a linha, via `docker stats --no-stream`
 - Atualização de imagem via `docker pull` + `compose up`
 
 #### Aba Logs
@@ -559,16 +607,24 @@ faz o servidor subir em HTTP puro.
 ```
 monitor/
 ├── server.py                # Backend Flask (porta 8180, auth PAM)
-├── setup.sh                 # Script de instalação
+├── setup.sh                 # Atalho para lib/post-install/setup-monitor.sh
 ├── requirements.txt         # Dependências Python
 ├── .env.example             # Exemplo de configuração
 ├── templates/
 │   └── index.html           # SPA Jinja2
 ├── static/
-│   ├── app.js               # Frontend Vanilla JS
+│   ├── js/                  # Frontend Vanilla JS (módulos ES)
+│   │   ├── main.js          # Inicialização, timers e header
+│   │   ├── api.js, state.js, ui.js, utils.js
+│   │   └── tabs/            # metricas, rede, servicos, containers, logs
 │   ├── style.css            # Dark theme CSS
 │   ├── favicon.svg          # Ícone SVG
 │   └── favicon.ico          # Ícone ICO
+├── data/                    # Gerado na instalação (não versionado)
+│   ├── ca/                  # CA local (ca.pem, ca-key.pem)
+│   ├── certs/               # Certificado do servidor
+│   ├── watchlist.json       # Alvos da watchlist
+│   └── watchlist_historico.json  # Histórico de latência
 └── scripts/
     ├── get_status.sh        # CPU, GPU, RAM, disco, sistema
     ├── get_network.sh       # Interfaces e portas
@@ -608,34 +664,6 @@ sudo apt install -y dmidecode
 # rattones ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode
 ```
 
-### Como Usar
-```bash
-# Carregar bibliotecas necessárias
-source lib/logging.sh
-source lib/backup_configs.sh
-
-# Fazer backup de um container específico
-backup_container_config "Crafty" "/home/rattones/crafty"
-backup_container_config "Home Assistant" "/home/rattones/haos"
-
-# Fazer backup de todos os containers
-declare -a CONTAINERS=(
-    "Crafty" "/home/rattones/crafty"
-    "Home Assistant" "/home/rattones/haos"
-)
-backup_todas_configs
-
-# Listar backups existentes
-listar_backups
-```
-
-### Pastas de Configuração
-- **Crafty Controller**: `docker/config/` (mapeado para `/crafty/app/config`)
-- **Home Assistant**: `config/` ou `/home/rattones/.homeassistant` ou `/config`
-
-### Integração com Atualização
-O backup é executado automaticamente durante o processo de atualização do servidor para preservar as configurações antes de possíveis mudanças.
-
 ---
 
 ## 🧪 Testes Unitários
@@ -650,17 +678,18 @@ cd tests
 ```
 
 **Cobertura dos testes:**
-- ✅ Estrutura do projeto (18 testes)
-- ✅ Bootstrap de instalação (6 testes)  
+- ✅ Estrutura do projeto (19 testes)
+- ✅ Bootstrap de instalação (6 testes)
 - ✅ Módulos de post-install (16 testes)
 - ✅ Biblioteca de logging (10 testes)
-- ✅ Sistema de atualização (7 testes)
-- ✅ Atualização de containers (7 testes)
+- ✅ Sistema de atualização (9 testes)
+- ✅ Atualização de containers (10 testes)
+- ✅ Atualização de Node.js (5 testes)
 - ✅ Conversor de logs para Markdown (11 testes)
 - ✅ Backup de configurações (16 testes)
 - ✅ Detecção de duplicatas APT (16 testes)
 
-**Total: 107 testes automatizados**
+**Total: 118 testes automatizados**
 
 Para mais detalhes, consulte: [tests/README.md](tests/README.md)
 
