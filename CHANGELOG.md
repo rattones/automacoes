@@ -19,6 +19,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 #### 🖥️ Monitor Web do Servidor — Aba Rede
 - **Alvos HTTP(S) da watchlist não sobre TLS**: o check de alcançabilidade agora aceita qualquer certificado (`ssl.CERT_NONE`) — painéis internos (Crafty, roteadores, NAS) quase sempre usam certificado autoassinado, o que marcava como "offline" um serviço que estava no ar (`CERTIFICATE_VERIFY_FAILED`)
 
+### ✨ Novidades
+
+#### 🖥️ Monitor Web do Servidor — Aba Containers
+- **Botão "Remover"** com modal de confirmação (`docker rm -f`, opção de remover também volumes anônimos com `-v`; volumes nomeados são preservados)
+- **Árvore de dependência**: a coleta passa a detectar dependências entre containers (`depends_on` do compose, `--link`, `network_mode: container:` e `volumes_from`). Ao remover um container com dependentes, a modal sugere remover também os que dependem dele (pré-marcados) e lista as dependências como opcionais. A remoção segue a ordem dependente → dependência e para na primeira falha. Deixar um dependente para trás exige confirmar duas vezes
+- Novo endpoint `POST /api/container/remove` e script `container_remove.sh`
+
 ### 🔧 Melhorias
 
 #### 🖥️ Monitor Web do Servidor — Aba Rede

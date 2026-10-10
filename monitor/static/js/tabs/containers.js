@@ -12,6 +12,10 @@ import { pedirSudo, mostrarOutput, setGauge } from '../ui.js';
 // refreshes silenciosos, que re-renderizam a tabela inteira via innerHTML.
 const expandidos = new Set();
 
+// Última lista de containers carregada — usada para montar a árvore de
+// dependências na modal de remoção.
+let ultimosContainers = [];
+
 export async function carregarContainers(silencioso = false) {
   if (!silencioso) {
     $('#tbody-containers').innerHTML = '<tr><td colspan="6" class="loading-row">Carregando...</td></tr>';
@@ -23,6 +27,7 @@ export async function carregarContainers(silencioso = false) {
   const ctnDados = dados.containers ?? {};
   const containers = ctnDados.containers ?? [];
   const stacks = ctnDados.stacks ?? [];
+  ultimosContainers = containers;
 
   // Mapear container → stack (diretório)
   const containerParaStack = {};
@@ -84,6 +89,7 @@ export async function carregarContainers(silencioso = false) {
           <button class="btn btn-ghost btn-sm" onclick="acaoContainer('stop',    '${esc(c.nome)}')">Parar</button>
           <button class="btn btn-ghost btn-sm" onclick="acaoContainer('start',   '${esc(c.nome)}')">Iniciar</button>
           ${updateBtn}
+          <button class="btn btn-danger btn-sm" onclick="removerContainer('${esc(c.nome)}')">Remover</button>
         </div>
       </td>
     </tr>
@@ -193,5 +199,138 @@ async function atualizarContainer(nome, caminho) {
   );
 }
 window.atualizarContainer = atualizarContainer;
+
+// ── Remoção (com árvore de dependência) ──────────────────────────────────────
+
+// Mapa nome → nomes dos containers que dependem dele (inverso de depende_de).
+function mapaDependentes() {
+  const mapa = {};
+  ultimosContainers.forEach(c => {
+    (c.depende_de ?? []).forEach(dep => (mapa[dep] ??= []).push(c.nome));
+  });
+  return mapa;
+}
+
+// Fecho transitivo a partir de `inicio` seguindo `vizinhos(nome)`.
+function alcancaveis(inicio, vizinhos) {
+  const vistos = new Set();
+  const pilha = [...vizinhos(inicio)];
+  while (pilha.length) {
+    const n = pilha.pop();
+    if (n === inicio || vistos.has(n)) continue;
+    vistos.add(n);
+    pilha.push(...vizinhos(n));
+  }
+  return vistos;
+}
+
+// Ordena para remoção: quem depende vem antes de quem é dependência.
+function ordenarRemocao(nomes, dependentes) {
+  const conjunto = new Set(nomes);
+  const ordem = [];
+  const visitados = new Set();
+  const visitar = n => {
+    if (visitados.has(n)) return;
+    visitados.add(n);
+    (dependentes[n] ?? []).filter(d => conjunto.has(d)).forEach(visitar);
+    ordem.push(n);
+  };
+  nomes.forEach(visitar);
+  return ordem;
+}
+
+let remocaoAlvo = null;
+let remocaoAvisada = false; // 2º clique após o aviso de dependentes confirma
+
+function removerContainer(nome) {
+  const dependentes = mapaDependentes();
+  const dependeDe = Object.fromEntries(ultimosContainers.map(c => [c.nome, c.depende_de ?? []]));
+
+  // Quem quebra sem o alvo (sugeridos) e do que a árvore depende (opcionais).
+  const quebram = alcancaveis(nome, n => dependentes[n] ?? []);
+  const dependencias = new Set();
+  [nome, ...quebram].forEach(n => alcancaveis(n, m => dependeDe[m] ?? []).forEach(d => dependencias.add(d)));
+  quebram.forEach(n => dependencias.delete(n));
+  dependencias.delete(nome);
+
+  remocaoAlvo = nome;
+  $('#remover-ctn-descricao').innerHTML = `Remover o container <strong>${esc(nome)}</strong>? Esta ação não pode ser desfeita.`;
+  $('#remover-ctn-volumes').checked = false;
+  $('#remover-ctn-erro').classList.add('hidden');
+  $('#remover-ctn-confirmar').textContent = 'Remover';
+  remocaoAvisada = false;
+
+  const itens = [
+    { nome, marcado: true, travado: true, relacao: 'selecionado' },
+    ...[...quebram].sort().map(n => ({ nome: n, marcado: true, relacao: `depende de ${(dependeDe[n] ?? []).join(', ')}` })),
+    ...[...dependencias].sort().map(n => ({ nome: n, marcado: false, relacao: `usado por ${(dependentes[n] ?? []).join(', ')}` })),
+  ];
+
+  const temArvore = itens.length > 1;
+  $('#remover-ctn-arvore').classList.toggle('hidden', !temArvore);
+  $('#remover-ctn-lista').innerHTML = temArvore ? itens.map(i => `<li><label>
+      <input type="checkbox" value="${esc(i.nome)}"${i.marcado ? ' checked' : ''}${i.travado ? ' disabled' : ''}>
+      <span>${esc(i.nome)}</span>
+      <span class="relacao">${esc(i.relacao)}</span>
+    </label></li>`).join('') : '';
+
+  $('#remover-ctn-modal').classList.remove('hidden');
+}
+window.removerContainer = removerContainer;
+
+function fecharModalRemocao() {
+  $('#remover-ctn-modal').classList.add('hidden');
+  remocaoAlvo = null;
+}
+
+// Marcar um container marca também quem depende dele (dentro da lista).
+$('#remover-ctn-lista')?.addEventListener('change', e => {
+  remocaoAvisada = false;
+  $('#remover-ctn-confirmar').textContent = 'Remover';
+  $('#remover-ctn-erro').classList.add('hidden');
+  if (!e.target.checked) return;
+  const dependentes = mapaDependentes();
+  alcancaveis(e.target.value, n => dependentes[n] ?? []).forEach(n => {
+    const cb = $(`#remover-ctn-lista input[value="${n}"]`);
+    if (cb) cb.checked = true;
+  });
+});
+
+$('#remover-ctn-cancelar')?.addEventListener('click', fecharModalRemocao);
+
+$('#remover-ctn-confirmar')?.addEventListener('click', async () => {
+  if (!remocaoAlvo) return;
+  const dependentes = mapaDependentes();
+  const marcados = [remocaoAlvo, ...[...document.querySelectorAll('#remover-ctn-lista input:checked:not(:disabled)')].map(cb => cb.value)];
+  const conjunto = new Set(marcados);
+
+  // Avisa (uma vez) se algo removido continuaria sendo usado por quem fica.
+  const orfaos = marcados.flatMap(n => (dependentes[n] ?? []).filter(d => !conjunto.has(d)).map(d => `${d} → ${n}`));
+  if (orfaos.length && !remocaoAvisada) {
+    const erroEl = $('#remover-ctn-erro');
+    erroEl.textContent = `Estes containers vão ficar sem a dependência (dependente → dependência): ${orfaos.join(', ')}. Clique de novo para remover mesmo assim.`;
+    erroEl.classList.remove('hidden');
+    $('#remover-ctn-confirmar').textContent = 'Remover mesmo assim';
+    remocaoAvisada = true;
+    return;
+  }
+
+  const ordem = ordenarRemocao(marcados, dependentes);
+  const volumes = $('#remover-ctn-volumes').checked;
+  fecharModalRemocao();
+  toast(`Removendo ${ordem.join(', ')}...`, 'aviso', 5000);
+
+  const r = await api('/api/container/remove', {
+    method: 'POST',
+    body: { containers: ordem, volumes }
+  });
+  if (r?.success) {
+    toast(`Removido(s): ${r.removidos.join(', ')}`, 'ok');
+  } else {
+    const parcial = r?.removidos?.length ? ` (já removidos: ${r.removidos.join(', ')})` : '';
+    toast(`Erro: ${r?.error || r?.erro || r?.output || 'Falha'}${parcial}`, 'erro', 7000);
+  }
+  await carregarContainers(true);
+});
 
 $('#btn-refresh-containers')?.addEventListener('click', () => carregarContainers());

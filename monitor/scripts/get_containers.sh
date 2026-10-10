@@ -122,8 +122,68 @@ for linha in linhas:
         "compose_project": compose_project,
         "compose_service": compose_service,
         "compose_dir":     compose_dir,
+        "depende_de":      [],
         "stats":           None
     })
+
+# ── Dependências entre containers ─────────────────────────────────────────────
+# Um único "docker inspect" com todos os IDs. Um container "depende de" outro
+# quando o referencia por: depends_on do compose (label, por nome de serviço
+# no mesmo projeto), --link, network_mode "container:X" ou volumes_from.
+try:
+    ids = [c["id"] for c in containers]
+    r = subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True, timeout=10) if ids else None
+    inspecoes = json.loads(r.stdout) if r and r.stdout.strip() else []
+except Exception:
+    inspecoes = []
+
+por_id_completo = {c["id_completo"]: c for c in containers}
+por_nome = {c["nome"]: c for c in containers}
+por_servico = {(c["compose_project"], c["compose_service"]): c for c in containers if c["compose_service"]}
+
+def resolver(ref):
+    # Aceita nome, ID completo ou prefixo de ID.
+    ref = ref.lstrip("/")
+    if ref in por_nome:
+        return por_nome[ref]["nome"]
+    for id_c, c in por_id_completo.items():
+        if ref and id_c.startswith(ref):
+            return c["nome"]
+    return None
+
+for insp in inspecoes:
+    c = por_id_completo.get(insp.get("Id", ""))
+    if c is None:
+        continue
+    deps = set()
+
+    labels = (insp.get("Config") or {}).get("Labels") or {}
+    for item in labels.get("com.docker.compose.depends_on", "").split(","):
+        servico = item.split(":", 1)[0].strip()
+        alvo = por_servico.get((c["compose_project"], servico))
+        if alvo:
+            deps.add(alvo["nome"])
+
+    host_cfg = insp.get("HostConfig") or {}
+    for link in host_cfg.get("Links") or []:
+        # Formato: "/origem:/destino/alias"
+        nome = resolver(link.split(":", 1)[0])
+        if nome:
+            deps.add(nome)
+
+    modo_rede = host_cfg.get("NetworkMode") or ""
+    if modo_rede.startswith("container:"):
+        nome = resolver(modo_rede.split(":", 1)[1])
+        if nome:
+            deps.add(nome)
+
+    for vf in host_cfg.get("VolumesFrom") or []:
+        nome = resolver(vf.split(":", 1)[0])
+        if nome:
+            deps.add(nome)
+
+    deps.discard(c["nome"])
+    c["depende_de"] = sorted(deps)
 
 # ── Stats de uso de recursos (CPU/Mem/Rede/Disco/Swap) ─────────────────────────
 # Uma única chamada a "docker stats" cobre todos os containers de uma vez —

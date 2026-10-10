@@ -862,6 +862,30 @@ def api_container_action():
         return jsonify({"success": ok, "output": saida, "erro": "" if ok else saida})
 
 
+@app.route("/api/container/remove", methods=["POST"])
+@login_required
+def api_container_remove():
+    dados = request.get_json(silent=True) or {}
+    lista = dados.get("containers")
+
+    if not isinstance(lista, list) or not lista:
+        return jsonify({"success": False, "erro": "Informe ao menos um container."}), 400
+
+    try:
+        containers = [_validar_campo(str(c), RE_CONTAINER, "container") for c in lista]
+    except ValueError as e:
+        return jsonify({"success": False, "erro": str(e)}), 400
+
+    remover_volumes = "1" if dados.get("volumes") is True else "0"
+
+    script = SCRIPTS_DIR / "container_remove.sh"
+    ok, saida = _executar_script(script, args=[remover_volumes, *containers], timeout=TIMEOUT_ACAO)
+    try:
+        return jsonify(json.loads(saida))
+    except (json.JSONDecodeError, TypeError):
+        return jsonify({"success": ok, "output": saida, "erro": "" if ok else saida})
+
+
 @app.route("/api/update/system", methods=["POST"])
 @login_required
 def api_update_system():
